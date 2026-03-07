@@ -26,16 +26,12 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-        with:
-          version: "lab:latest"
-          driver: cloud
-          endpoint: "jibbalit/omni-agent"
 
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
           tags: "${{ vars.DOCKER_USER }}/omni-stack:latest"
+          push: true
           build-args: |
             HF_TOKEN=${{ secrets.HF_TOKEN }}
-          outputs: ${{ github.event_name == 'pull_request' && 'type=cacheonly' || 'type=registry' }}
