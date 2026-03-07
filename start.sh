@@ -78,6 +78,7 @@ export VLLM_URL="${VLLM_URL:-http://127.0.0.1:8001}"
 export VL_URL="${VL_URL:-http://127.0.0.1:8002}"
 export WAN_URL="${WAN_URL:-http://127.0.0.1:8003}"
 export OLLAMA_URL="${OLLAMA_URL:-http://127.0.0.1:11434}"
+export VLLM_TP="${VLLM_TP:-${TENSOR_PARALLEL:-1}}"
 export VLLM_CUDA_DEVICES="${VLLM_CUDA_DEVICES:-}"
 export VL_CUDA_DEVICES="${VL_CUDA_DEVICES:-}"
 export WAN_CUDA_DEVICES="${WAN_CUDA_DEVICES:-}"
@@ -241,7 +242,7 @@ run_with_optional_cuda "$VLLM_CUDA_DEVICES" python3 -m vllm.entrypoints.openai.a
     --model /workspace/hf_cache/Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated \
     --port 8001 \
     --host 0.0.0.0 \
-    --tensor-parallel-size "${VLLM_TP:-${TENSOR_PARALLEL:-1}}" \
+    --tensor-parallel-size "$VLLM_TP" \
     --gpu-memory-utilization 0.45 \
     --max-model-len 16384 \
     --enable-chunked-prefill \

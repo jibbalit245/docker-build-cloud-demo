@@ -42,7 +42,7 @@
     }
   ],
   "config": {
-    "gpuTypeId": "NVIDIA RTX PRO 6000",
+    "gpuTypeId": "NVIDIA RTX Pro 6000",
     "gpuCount": 7,
     "allowedCudaVersions": [
       "12.4",
