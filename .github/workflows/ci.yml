@@ -24,4 +24,3 @@ jobs:
         with:
           tags: "${{ vars.DOCKER_USER }}/omni-stack:latest"
           outputs: ${{ github.event_name == 'pull_request' && 'type=cacheonly' || 'type=registry' }}
-
