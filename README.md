@@ -25,5 +25,4 @@ flowchart TD
     D --> R
     E --> R
     P --> R
-    F --> R
 ```
