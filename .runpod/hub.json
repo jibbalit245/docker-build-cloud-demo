@@ -47,6 +47,18 @@
         "value": "0.0.0.0:11434"
       },
       {
+        "key": "OLLAMA_MODEL_NAME",
+        "value": "hf.co/bartowski/Liliths-Whisper-L3.3-70b-0.2a.i1-Q4_K_M-GGUF:latest"
+      },
+      {
+        "key": "OLLAMA_MODEL_CANDIDATES",
+        "value": "hf.co/bartowski/Liliths-Whisper-L3.3-70b-0.1.Q4_K_M-GGUF:latest,hf.co/bartowski/Liliths-Whisper-L3.3-70b-0.2a.i1-Q4_K_M-GGUF:latest"
+      },
+      {
+        "key": "FORCE_SYNTHETIC_SSE",
+        "value": "true"
+      },
+      {
         "key": "HF_TOKEN",
         "input": {
           "name": "HuggingFace Token",

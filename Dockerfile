@@ -3,9 +3,6 @@ FROM runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04
 LABEL maintainer="omni-stack"
 LABEL description="Unified AI stack: Qwen3-Next-80B-A3B + Qwen2.5-VL-32B + Lilith-L3.3-70B + Wan2.2 + Open WebUI"
 
-ARG HF_TOKEN=""
-ENV HF_TOKEN=${HF_TOKEN}
-
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     HF_HOME=/workspace/hf_cache \

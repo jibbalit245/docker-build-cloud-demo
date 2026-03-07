@@ -123,7 +123,7 @@ def chat_completions(req: ChatRequest):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", default="huihui-ai/Qwen2.5-VL-32B-Instruct-abliterated")
+    parser.add_argument("--model", default="/workspace/hf_cache/Qwen2.5-VL-32B-Instruct-abliterated")
     parser.add_argument("--port", type=int, default=8002)
     parser.add_argument("--gpu-frac", type=float, default=0.35)
     args = parser.parse_args()
