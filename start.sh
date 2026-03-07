@@ -169,8 +169,22 @@ name_in_allowed_set() {
     return 1
 }
 
+name_contains_allowed_fragment() {
+    local CANDIDATE=$1
+    shift
+    local ALLOWED_FRAGMENT
+
+    for ALLOWED_FRAGMENT in "$@"; do
+        if [[ "$CANDIDATE" == *"$ALLOWED_FRAGMENT"* ]]; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
 purge_non_target_hf_models() {
-    local TARGET_HF_MODEL_DIRS=(
+    local TARGET_HF_MODEL_NAME_FRAGMENTS=(
         "Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated"
         "Qwen2.5-VL-32B-Instruct-abliterated"
         "Wan2.2-T2V-14B"
@@ -184,7 +198,7 @@ purge_non_target_hf_models() {
         fi
 
         DIR_NAME="$(basename "$MODEL_DIR")"
-        if ! name_in_allowed_set "$DIR_NAME" "${TARGET_HF_MODEL_DIRS[@]}"; then
+        if ! name_contains_allowed_fragment "$DIR_NAME" "${TARGET_HF_MODEL_NAME_FRAGMENTS[@]}"; then
             echo "[MODELS] Removing non-target HF model cache: $DIR_NAME"
             rm -rf "$MODEL_DIR"
         fi
