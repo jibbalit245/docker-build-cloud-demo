@@ -26,7 +26,7 @@ Expected:
 - Gateway returns `status` as `ok` or `degraded` with service details.
 - Vision health includes `"loaded": true`.
 - Wan health includes `"model_loaded": true`.
-- Ollama tags include a Lilith model.
+- Ollama tags include the configured model (default Lilith) and do not include unrelated extra models.
 
 ## 3. Text route smoke test (gateway -> vLLM)
 

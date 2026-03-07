@@ -82,6 +82,13 @@ export VLLM_TP="${VLLM_TP:-${TENSOR_PARALLEL:-1}}"
 export VLLM_CUDA_DEVICES="${VLLM_CUDA_DEVICES:-}"
 export VL_CUDA_DEVICES="${VL_CUDA_DEVICES:-}"
 export WAN_CUDA_DEVICES="${WAN_CUDA_DEVICES:-}"
+GPU_COUNT="$(nvidia-smi --query-gpu=index --format=csv,noheader 2>/dev/null | wc -l | tr -d ' ')"
+if [[ "$GPU_COUNT" =~ ^[0-9]+$ ]] && [ "$GPU_COUNT" -gt 0 ]; then
+    DEFAULT_OLLAMA_CUDA_DEVICE="$((GPU_COUNT - 1))"
+else
+    DEFAULT_OLLAMA_CUDA_DEVICE=""
+fi
+export OLLAMA_CUDA_DEVICES="${OLLAMA_CUDA_DEVICES:-$DEFAULT_OLLAMA_CUDA_DEVICE}"
 
 # ══════════════════════════════════════════════════════
 # MODELS — pull from HuggingFace on first boot
@@ -137,14 +144,17 @@ download_model "Wan-AI/Wan2.2-T2V-14B" "model_index.json"
 log_phase "phase=models status=download_completed"
 
 # Lilith Whisper via Ollama
-OLLAMA_MODELS=/workspace/ollama_models ollama serve > /workspace/logs/ollama.log 2>&1 &
+if [ -n "$OLLAMA_CUDA_DEVICES" ]; then
+    echo "[OLLAMA] Using CUDA device(s): $OLLAMA_CUDA_DEVICES"
+fi
+run_with_optional_cuda "$OLLAMA_CUDA_DEVICES" env OLLAMA_MODELS=/workspace/ollama_models ollama serve > /workspace/logs/ollama.log 2>&1 &
 log_phase "phase=models status=ollama_started_for_pull"
 for i in $(seq 1 20); do
     sleep 2
     curl -sf http://localhost:11434/api/tags > /dev/null 2>&1 && break
     echo "[OLLAMA] Waiting... ($i/20)"
 done
-if ! ollama list 2>/dev/null | grep -qi "lilith"; then
+if ! ollama list 2>/dev/null | awk 'NR>1 && NF {print $1}' | grep -Fxq "$OLLAMA_MODEL_NAME"; then
     echo "[OLLAMA] Pulling $OLLAMA_MODEL_NAME ..."
     ollama pull "$OLLAMA_MODEL_NAME" \
         >> /workspace/logs/ollama_pull.log 2>&1 \
@@ -154,6 +164,14 @@ if ! ollama list 2>/dev/null | grep -qi "lilith"; then
             exit 1
         }
 fi
+echo "[OLLAMA] Purging non-target Ollama models..."
+ollama list 2>/dev/null | awk 'NR>1 && NF {print $1}' | while read -r MODEL_NAME; do
+    if [ "$MODEL_NAME" != "$OLLAMA_MODEL_NAME" ]; then
+        echo "[OLLAMA] Removing $MODEL_NAME"
+        ollama rm "$MODEL_NAME" >> /workspace/logs/ollama_pull.log 2>&1 || \
+            echo "[OLLAMA] WARNING: Failed to remove $MODEL_NAME"
+    fi
+done
 log_phase "phase=models status=ollama_pull_completed"
 
 # ══════════════════════════════════════════════════════

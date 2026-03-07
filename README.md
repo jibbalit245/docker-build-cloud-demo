@@ -7,6 +7,11 @@ Docker Build Cloud CI — builds jibbalit/omni-stack:latest on every push to mai
 - Lilith-L3.3-70B GGUF (Ollama)
 - Wan2.2 T2V-14B (video)
 
+## Ollama GPU/device behavior
+- `start.sh` pins Ollama to the last detected GPU by default (for 8 GPUs, this is GPU `7`).
+- Override with `OLLAMA_CUDA_DEVICES` if you want a different device assignment.
+- On startup, Ollama removes any local models except the configured `OLLAMA_MODEL_NAME`.
+
 ## FastAPI pipeline flow (gateway interconnection)
 The FastAPI gateway (`gateway.py`, port `8000`) is the pipeline router between clients and model backends.
 
