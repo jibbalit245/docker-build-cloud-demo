@@ -23,6 +23,18 @@ jobs:
         with:
           token: ${{ secrets.TC_CLOUD_TOKEN }}
 
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: 21
+          distribution: temurin
+
+      - name: Clone and run Testcontainers example
+        run: |
+          git clone https://github.com/AtomicJar/testcontainers-cloud-java-example tc-example
+          cd tc-example
+          ./mvnw test
+
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
