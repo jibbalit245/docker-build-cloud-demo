@@ -19,6 +19,26 @@
         "max_tokens": 64
       },
       "timeout": 120000
+    },
+    {
+      "name": "vision_chat",
+      "input": {
+        "type": "chat",
+        "model": "vision",
+        "prompt": "Say hello in one sentence.",
+        "max_tokens": 64
+      },
+      "timeout": 120000
+    },
+    {
+      "name": "wan_video_generate",
+      "input": {
+        "type": "video",
+        "model": "wan2.2",
+        "prompt": "A short clip of waves hitting a beach at sunset.",
+        "num_frames": 16
+      },
+      "timeout": 600000
     }
   ],
   "config": {

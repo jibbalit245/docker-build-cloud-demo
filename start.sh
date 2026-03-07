@@ -267,7 +267,10 @@ echo "[SVC] Starting Open WebUI..."
 DATA_DIR=/workspace/webui \
 WEBUI_SECRET_KEY="${WEBUI_SECRET_KEY:-omnistack}" \
 WEBUI_AUTH="${WEBUI_AUTH:-False}" \
+ENABLE_OPENAI_API="${ENABLE_OPENAI_API:-True}" \
+ENABLE_OLLAMA_API="${ENABLE_OLLAMA_API:-False}" \
 OPENAI_API_BASE_URL="http://localhost:8000/v1" \
+OPENAI_API_BASE_URLS="http://localhost:8000/v1" \
 OPENAI_API_KEY="none" \
 open-webui serve \
     --host 0.0.0.0 \
