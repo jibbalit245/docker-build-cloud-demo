@@ -1,0 +1,53 @@
+{
+  "tests": [
+    {
+      "name": "text_chat",
+      "input": {
+        "type": "chat",
+        "model": "qwen3-80b",
+        "prompt": "Say hello in one sentence.",
+        "max_tokens": 64
+      },
+      "timeout": 120000
+    },
+    {
+      "name": "lilith_chat",
+      "input": {
+        "type": "chat",
+        "model": "lilith",
+        "prompt": "Say hello in one sentence.",
+        "max_tokens": 64
+      },
+      "timeout": 120000
+    }
+  ],
+  "config": {
+    "gpuTypeId": "NVIDIA A100-SXM4-80GB",
+    "gpuCount": 2,
+    "allowedCudaVersions": [
+      "12.4",
+      "12.3",
+      "12.2",
+      "12.1",
+      "12.0"
+    ],
+    "env": [
+      {
+        "key": "HF_HOME",
+        "value": "/workspace/hf_cache"
+      },
+      {
+        "key": "OLLAMA_MODELS",
+        "value": "/workspace/ollama_models"
+      },
+      {
+        "key": "TENSOR_PARALLEL",
+        "value": "2"
+      },
+      {
+        "key": "GPU_MEMORY_UTILIZATION",
+        "value": "0.85"
+      }
+    ]
+  }
+}
