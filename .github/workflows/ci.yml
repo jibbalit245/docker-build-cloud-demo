@@ -1,8 +1,6 @@
 name: ci
 on:
-  push:
-    branches:
-      - "main"
+  workflow_dispatch:
 jobs:
   docker:
     runs-on: ubuntu-latest
@@ -23,4 +21,5 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           tags: "${{ vars.DOCKER_USER }}/omni-stack:latest"
-          outputs: ${{ github.event_name == 'pull_request' && 'type=cacheonly' || 'type=registry' }}
+          outputs: type=registry
+
