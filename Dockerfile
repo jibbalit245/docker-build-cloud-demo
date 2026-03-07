@@ -11,7 +11,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     MODEL_DIR=/workspace/models \
     VLLM_TP=1
 
-# System deps - zstd required for Ollama installer
+# System deps (zstd required by Ollama installer)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl wget git ffmpeg libsm6 libxext6 \
     libglib2.0-0 libgl1-mesa-glx build-essential openssh-server \
@@ -60,5 +60,7 @@ COPY start.sh /start.sh
 RUN chmod +x /start.sh
 
 EXPOSE 8000 8001 8002 8003 8888 11434 22
+
 VOLUME ["/workspace"]
+
 CMD ["/start.sh"]
