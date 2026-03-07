@@ -117,7 +117,7 @@ download_model() {
             >> /workspace/logs/model_downloads.log 2>&1; then
             echo "[MODELS] $NAME done."
         else
-            echo "[MODELS] FATAL: $NAME failed — check logs"
+            echo "[MODELS] FATAL: $NAME failed — check /workspace/logs/model_downloads.log"
             return 1
         fi
     else
@@ -232,7 +232,10 @@ wait_for_url() {
 
 log_phase "phase=workflow status=services_starting"
 
-# ── vLLM (Qwen3-Next-80B-A3B) ─────────────────────────
+# ── vLLM-led model server orchestration (non-Ollama) ──
+# vLLM starts first, then vision and Wan start in sequence.
+
+# vLLM (Qwen3-Next-80B-A3B)
 echo "[SVC] Starting vLLM..."
 run_with_optional_cuda "$VLLM_CUDA_DEVICES" python3 -m vllm.entrypoints.openai.api_server \
     --model /workspace/hf_cache/Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated \
@@ -245,8 +248,9 @@ run_with_optional_cuda "$VLLM_CUDA_DEVICES" python3 -m vllm.entrypoints.openai.a
     --served-model-name qwen3-80b \
     > /workspace/logs/vllm.log 2>&1 &
 VLLM_PID=$!
+wait_for_url "vLLM" "$VLLM_URL/health" 180 5
 
-# ── Vision Server (Qwen2.5-VL-32B) ─────────────────────
+# Vision Server (Qwen2.5-VL-32B)
 echo "[SVC] Starting Qwen2.5-VL-32B vision server..."
 run_with_optional_cuda "$VL_CUDA_DEVICES" python3 /app/vl_server.py \
     --model /workspace/hf_cache/Qwen2.5-VL-32B-Instruct-abliterated \
@@ -254,19 +258,18 @@ run_with_optional_cuda "$VL_CUDA_DEVICES" python3 /app/vl_server.py \
     --gpu-frac 0.35 \
     > /workspace/logs/vl_server.log 2>&1 &
 VL_PID=$!
+wait_for_url "Vision" "$VL_URL/health" 180 5
 
-# ── Wan2.2 Video Server ─────────────────────────────────
+# Wan2.2 Video Server
 echo "[SVC] Starting Wan2.2..."
 run_with_optional_cuda "$WAN_CUDA_DEVICES" python3 /app/wan_server.py \
     --model-dir /workspace/hf_cache \
     --port 8003 \
     > /workspace/logs/wan_server.log 2>&1 &
 WAN_PID=$!
+wait_for_url "Wan2.2" "$WAN_URL/health" 180 5
 
 # ── Unified Gateway ─────────────────────────────────────
-wait_for_url "vLLM" "$VLLM_URL/health" 180 5
-wait_for_url "Vision" "$VL_URL/health" 180 5
-wait_for_url "Wan2.2" "$WAN_URL/health" 180 5
 wait_for_url "Ollama" "$OLLAMA_URL/api/tags" 60 2
 
 # Ensure the heavy model servers are truly loaded, not just listening.
