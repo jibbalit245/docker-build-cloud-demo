@@ -12,6 +12,23 @@ OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434")
 RETRY_ATTEMPTS = int(os.getenv("HANDLER_RETRY_ATTEMPTS", "3"))
 RETRY_BASE_DELAY = float(os.getenv("HANDLER_RETRY_BASE_DELAY", "0.5"))
 
+
+def require_loaded_flag(url, key, timeout=180, interval=5):
+    start = time.time()
+    while time.time() - start < timeout:
+        try:
+            r = requests.get(url, timeout=5)
+            if r.status_code < 400:
+                payload = r.json()
+                if payload.get(key) is True:
+                    print(f"Ready: {url} with {key}=true")
+                    return True
+        except Exception:
+            pass
+        print(f"Waiting for loaded flag {key} from {url}...")
+        time.sleep(interval)
+    raise RuntimeError(f"Timed out waiting for {url} {key}=true")
+
 # ── Start all backend services at worker boot ──────────────────────────────
 
 def start_services():
@@ -35,7 +52,7 @@ def start_services():
     # Vision server
     procs.append(subprocess.Popen([
         "python3", "/app/vl_server.py",
-        "--model", os.getenv("VL_MODEL", "huihui-ai/Qwen2.5-VL-32B-Instruct-abliterated"),
+        "--model", os.getenv("VL_MODEL", "/workspace/hf_cache/Qwen2.5-VL-32B-Instruct-abliterated"),
         "--port", "8002",
         "--gpu-frac", os.getenv("VL_GPU_FRAC", "0.35"),
     ]))
@@ -73,6 +90,8 @@ wait_for_service(f"{VLLM_URL}/health", timeout=300)
 wait_for_service(f"{VL_URL}/health", timeout=300)
 wait_for_service(f"{WAN_URL}/health", timeout=300)
 wait_for_service(f"{OLLAMA_URL}/api/tags", timeout=120)
+require_loaded_flag(f"{VL_URL}/health", "loaded", timeout=240)
+require_loaded_flag(f"{WAN_URL}/health", "model_loaded", timeout=240)
 
 print("All services ready — accepting jobs")
 
@@ -83,11 +102,15 @@ SERVICES = {
     "qwen3-80b":  VLLM_URL,
     "qwen3":      VLLM_URL,
     "text":       VLLM_URL,
+    "qwen2.5-vl": VL_URL,
     "vision":     VL_URL,
     "vl":         VL_URL,
+    "wan2.2":     WAN_URL,
     "video":      WAN_URL,
     "wan":        WAN_URL,
     "lilith":     OLLAMA_URL,
+    "llama":      OLLAMA_URL,
+    "l3.3":       OLLAMA_URL,
     "whisper":    OLLAMA_URL,
 }
 OLLAMA_MODEL = os.getenv(
@@ -109,7 +132,21 @@ OLLAMA_MODEL_CACHE = None
 
 
 def resolve(model):
-    m = (model or "").lower()
+    m = (model or "").lower().strip()
+    alias_map = {
+        "qwen3-80b-instruct": "qwen3-80b",
+        "huihui-ai/huihui-qwen3-next-80b-a3b-instruct-abliterated": "qwen3-80b",
+        "qwen2.5-vl-32b": "qwen2.5-vl",
+        "qwen2.5-vl": "qwen2.5-vl",
+        "qwen2.5-vl-32b-instruct-abliterated": "qwen2.5-vl",
+        "huihui-ai/qwen2.5-vl-32b-instruct-abliterated": "qwen2.5-vl",
+        "wan2.2-t2v": "wan2.2",
+        "wan-ai/wan2.2-t2v-14b": "wan2.2",
+        "lilith-whisper": "lilith",
+        "liliths-whisper-l3.3-70b-0.2a.i1-q4_k_m.gguf": "lilith",
+        "liliths-whisper-l3.3-70b-0.2a.i1-q5_k_m.gguf": "lilith",
+    }
+    m = alias_map.get(m, m)
     for k, v in SERVICES.items():
         if k in m:
             return v

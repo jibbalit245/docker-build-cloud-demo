@@ -19,9 +19,9 @@ and deployed as a RunPod GPU pod. Six services run together inside one container
 | Open WebUI     | 3000  | open-webui     | Frontend UI for all models                         |
 | Gateway        | 8000  | gateway.py     | FastAPI router — single entry point for all models |
 | vLLM           | 8001  | vLLM 0.6.3     | huihui-ai/Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated |
-| Vision Server  | 8002  | vl_server.py   | Qwen/Qwen2.5-VL-32B-Instruct-GPTQ-Int4            |
+| Vision Server  | 8002  | vl_server.py   | huihui-ai/Qwen2.5-VL-32B-Instruct-abliterated     |
 | Wan2.2 Video   | 8003  | wan_server.py  | Wan-AI/Wan2.2-T2V-14B                              |
-| Ollama         | 11434 | Ollama         | Liliths-Whisper-L3.3-70b-0.1.Q5_K_M GGUF          |
+| Ollama         | 11434 | Ollama         | hf.co/bartowski/Liliths-Whisper-L3.3-70b-0.2a.i1-Q4_K_M-GGUF:latest |
 
 ---
 
@@ -29,7 +29,7 @@ and deployed as a RunPod GPU pod. Six services run together inside one container
 
 | File                | Purpose                                                                 |
 |---------------------|-------------------------------------------------------------------------|
-| `Dockerfile`        | Base image + all framework installs. ARG/ENV HF_TOKEN for HF auth.    |
+| `Dockerfile`        | Base image + framework installs. HF auth token is runtime-only via env. |
 | `start.sh`          | Container entrypoint. Downloads models + datasets, then starts services.|
 | `gateway.py`        | Unified FastAPI gateway on :8000. Routes by `model` field in request.  |
 | `vl_server.py`      | Vision inference server for Qwen2.5-VL-32B on :8002.                  |
@@ -48,8 +48,8 @@ On first boot the container:
 3. Downloads 31 datasets to `/workspace/datasets/` (skipped if already present)
 4. Starts SSH, Ollama, vLLM, vision server, Wan2.2 server, gateway, Open WebUI
 
-Downloads run in the background — services start immediately. On subsequent boots
-with the network volume attached, steps 2–3 are instant skips.
+Model/dataset bootstrap runs before service startup. On subsequent boots with the
+network volume attached, steps 2–3 are instant skips.
 
 ---
 
@@ -57,9 +57,9 @@ with the network volume attached, steps 2–3 are instant skips.
 
 ```
 huihui-ai/Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated  → /workspace/hf_cache/
-Qwen/Qwen2.5-VL-32B-Instruct-GPTQ-Int4                    → /workspace/hf_cache/
+huihui-ai/Qwen2.5-VL-32B-Instruct-abliterated             → /workspace/hf_cache/
 Wan-AI/Wan2.2-T2V-14B                                      → /workspace/hf_cache/
-hf.co/bartowski/Liliths-Whisper-L3.3-70b-0.1.Q5_K_M-GGUF → pulled via Ollama
+hf.co/bartowski/Liliths-Whisper-L3.3-70b-0.2a.i1-Q4_K_M-GGUF:latest → pulled via Ollama
 ```
 
 ---
@@ -95,7 +95,7 @@ POST :8000/v1/images/analyze
 - **Builder**: standard `docker/setup-buildx-action@v3` — no Docker Build Cloud
 - **Pushes to**: `westllc/omni-stack:latest` on Docker Hub
 - **Auth**: GitHub secret `DOCKER_PAT` (OAT) + variable `DOCKER_USER=westllc`
-- **HF token**: GitHub secret `HF_TOKEN`, passed as build-arg and baked into image as ENV
+- **HF token**: supplied at runtime via pod environment (not baked into image)
 
 ### DO NOT use Docker Build Cloud for this repo
 The Build Cloud endpoint `jibbalit/omni-agent` belongs to a different org than `westllc`
