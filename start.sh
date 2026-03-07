@@ -82,10 +82,11 @@ export VLLM_TP="${VLLM_TP:-${TENSOR_PARALLEL:-1}}"
 export VLLM_CUDA_DEVICES="${VLLM_CUDA_DEVICES:-}"
 export VL_CUDA_DEVICES="${VL_CUDA_DEVICES:-}"
 export WAN_CUDA_DEVICES="${WAN_CUDA_DEVICES:-}"
-GPU_COUNT="$(nvidia-smi --query-gpu=index --format=csv,noheader 2>/dev/null | wc -l | tr -d ' ')"
+GPU_COUNT="$(nvidia-smi --query-gpu=index --format=csv,noheader 2>/dev/null | wc -l | xargs)"
 if [[ "$GPU_COUNT" =~ ^[0-9]+$ ]] && [ "$GPU_COUNT" -gt 0 ]; then
     DEFAULT_OLLAMA_CUDA_DEVICE="$((GPU_COUNT - 1))"
 else
+    echo "[OLLAMA] WARNING: No GPUs detected via nvidia-smi; Ollama GPU pinning disabled."
     DEFAULT_OLLAMA_CUDA_DEVICE=""
 fi
 export OLLAMA_CUDA_DEVICES="${OLLAMA_CUDA_DEVICES:-$DEFAULT_OLLAMA_CUDA_DEVICE}"
@@ -143,6 +144,16 @@ download_model "huihui-ai/Qwen2.5-VL-32B-Instruct-abliterated" "config.json"
 download_model "Wan-AI/Wan2.2-T2V-14B" "model_index.json"
 log_phase "phase=models status=download_completed"
 
+# Returns local Ollama model identifiers (NAME column, including tags) one per line.
+list_ollama_models() {
+    local LIST_OUTPUT
+    if ! LIST_OUTPUT="$(ollama list 2>&1)"; then
+        echo "[OLLAMA] WARNING: Unable to list local models: $LIST_OUTPUT"
+        return 1
+    fi
+    printf '%s\n' "$LIST_OUTPUT" | awk 'NR>1 && NF {print $1}'
+}
+
 # Lilith Whisper via Ollama
 if [ -n "$OLLAMA_CUDA_DEVICES" ]; then
     echo "[OLLAMA] Using CUDA device(s): $OLLAMA_CUDA_DEVICES"
@@ -154,7 +165,13 @@ for i in $(seq 1 20); do
     curl -sf http://localhost:11434/api/tags > /dev/null 2>&1 && break
     echo "[OLLAMA] Waiting... ($i/20)"
 done
-if ! ollama list 2>/dev/null | awk 'NR>1 && NF {print $1}' | grep -Fxq "$OLLAMA_MODEL_NAME"; then
+if OLLAMA_LOCAL_MODELS="$(list_ollama_models)"; then
+    :
+else
+    OLLAMA_LOCAL_MODELS=""
+    echo "[OLLAMA] WARNING: Local model list unavailable; ensuring target model is present."
+fi
+if ! printf '%s\n' "$OLLAMA_LOCAL_MODELS" | grep -Fxq "$OLLAMA_MODEL_NAME"; then
     echo "[OLLAMA] Pulling $OLLAMA_MODEL_NAME ..."
     ollama pull "$OLLAMA_MODEL_NAME" \
         >> /workspace/logs/ollama_pull.log 2>&1 \
@@ -165,13 +182,22 @@ if ! ollama list 2>/dev/null | awk 'NR>1 && NF {print $1}' | grep -Fxq "$OLLAMA_
         }
 fi
 echo "[OLLAMA] Purging non-target Ollama models..."
-ollama list 2>/dev/null | awk 'NR>1 && NF {print $1}' | while read -r MODEL_NAME; do
+if OLLAMA_LOCAL_MODELS="$(list_ollama_models)"; then
+    :
+else
+    OLLAMA_LOCAL_MODELS=""
+    echo "[OLLAMA] WARNING: Unable to refresh model list for purge; skipping purge."
+fi
+while read -r MODEL_NAME; do
+    [ -z "$MODEL_NAME" ] && continue
     if [ "$MODEL_NAME" != "$OLLAMA_MODEL_NAME" ]; then
         echo "[OLLAMA] Removing $MODEL_NAME"
         ollama rm "$MODEL_NAME" >> /workspace/logs/ollama_pull.log 2>&1 || \
             echo "[OLLAMA] WARNING: Failed to remove $MODEL_NAME"
     fi
-done
+done <<EOF
+$OLLAMA_LOCAL_MODELS
+EOF
 log_phase "phase=models status=ollama_pull_completed"
 
 # ══════════════════════════════════════════════════════
