@@ -1,6 +1,6 @@
 FROM runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04
 
-LABEL maintainer="jibbalit"
+LABEL maintainer="westllc"
 LABEL description="Omni-Stack: Qwen3-80B + Qwen2.5-VL-32B + Lilith-L3.3-70B + Wan2.2 — models pulled at runtime"
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -8,7 +8,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     HF_HOME=/workspace/hf_cache \
     OLLAMA_MODELS=/workspace/ollama_models \
     OLLAMA_HOST=0.0.0.0:11434 \
-    VLLM_TP=1
+    VLLM_TP=1 \
+    PATH="/usr/local/bin:$PATH"
 
 # System deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -16,10 +17,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libsm6 libxext6 libglib2.0-0 libgl1-mesa-glx \
     && rm -rf /var/lib/apt/lists/*
 
-# Ollama
-RUN curl -fsSL https://ollama.com/install.sh | sh
+# Ollama — direct binary install (more reliable than install.sh in build envs)
+RUN wget -q https://github.com/ollama/ollama/releases/latest/download/ollama-linux-amd64 \
+    -O /usr/local/bin/ollama && \
+    chmod +x /usr/local/bin/ollama
 
-# Python deps
+# Python deps — everything needed to run all 4 model servers
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir \
     "vllm==0.6.3" \
@@ -43,8 +46,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
     "timm" \
     "numpy<2.0"
 
-# Copy server scripts — models are NOT downloaded here.
-# start.sh pulls everything at runtime into /workspace (network volume).
+# Copy server scripts — models pulled at runtime into /workspace (network volume)
 WORKDIR /app
 COPY gateway.py /app/gateway.py
 COPY vl_server.py /app/vl_server.py
@@ -53,6 +55,5 @@ COPY start.sh /start.sh
 RUN chmod +x /start.sh
 
 EXPOSE 8000 8001 8002 8003 8888 11434 22
-
 VOLUME ["/workspace"]
 CMD ["/start.sh"]
