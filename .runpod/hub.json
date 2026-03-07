@@ -1,0 +1,92 @@
+{
+  "title": "Omni-Stack: Multi-Model AI",
+  "description": "Unified AI stack serving Qwen3-Next-80B, Qwen2.5-VL-32B (vision), Lilith-Whisper-70B, and Wan2.2 (video generation) through a single OpenAI-compatible gateway.",
+  "type": "serverless",
+  "category": "language",
+  "config": {
+    "runsOn": "GPU",
+    "containerDiskInGb": 50,
+    "gpuCount": 2,
+    "gpuIds": "AMPERE_80",
+    "allowedCudaVersions": [
+      "12.4",
+      "12.3",
+      "12.2",
+      "12.1",
+      "12.0"
+    ],
+    "presets": [
+      {
+        "name": "Qwen3-80B Text (2x H100)",
+        "defaults": {
+          "VLLM_MODEL": "huihui-ai/Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated",
+          "TENSOR_PARALLEL": "2",
+          "GPU_MEMORY_UTILIZATION": "0.85"
+        }
+      },
+      {
+        "name": "Vision + Text (2x H100)",
+        "defaults": {
+          "VLLM_MODEL": "huihui-ai/Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated",
+          "TENSOR_PARALLEL": "2",
+          "GPU_MEMORY_UTILIZATION": "0.45"
+        }
+      }
+    ],
+    "env": [
+      {
+        "key": "HF_HOME",
+        "value": "/workspace/hf_cache"
+      },
+      {
+        "key": "OLLAMA_MODELS",
+        "value": "/workspace/ollama_models"
+      },
+      {
+        "key": "OLLAMA_HOST",
+        "value": "0.0.0.0:11434"
+      },
+      {
+        "key": "HF_TOKEN",
+        "input": {
+          "name": "HuggingFace Token",
+          "type": "string",
+          "description": "Your HuggingFace access token for downloading models",
+          "default": "",
+          "advanced": false
+        }
+      },
+      {
+        "key": "VLLM_MODEL",
+        "input": {
+          "name": "Primary LLM",
+          "type": "string",
+          "description": "HuggingFace model ID for the primary text model (served via vLLM)",
+          "default": "huihui-ai/Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated",
+          "advanced": false
+        }
+      },
+      {
+        "key": "TENSOR_PARALLEL",
+        "input": {
+          "name": "Tensor Parallel Size",
+          "type": "number",
+          "description": "Number of GPUs to split the model across",
+          "min": 1,
+          "max": 8,
+          "default": 2
+        }
+      },
+      {
+        "key": "GPU_MEMORY_UTILIZATION",
+        "input": {
+          "name": "GPU Memory Utilization",
+          "type": "string",
+          "description": "Fraction of GPU memory to use for vLLM (0.0-0.95)",
+          "default": "0.85",
+          "advanced": true
+        }
+      }
+    ]
+  }
+}
