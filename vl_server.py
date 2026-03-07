@@ -3,7 +3,7 @@ Qwen2.5-VL-32B Vision-Language Server
 OpenAI-compatible /v1/chat/completions with image support.
 
 NOTE: litmudoc/Qwen2.5-VL-32B-Instruct-abliterated-MLX-Q8 is Apple Silicon (MLX) only.
-This server uses Qwen/Qwen2.5-VL-32B-Instruct-GPTQ-Int4 for NVIDIA GPU compatibility.
+This server uses huihui-ai/Qwen2.5-VL-32B-Instruct-abliterated for NVIDIA GPU compatibility.
 Override with --model flag or VL_MODEL_ID env var.
 """
 import argparse
@@ -123,7 +123,7 @@ def chat_completions(req: ChatRequest):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", default="Qwen/Qwen2.5-VL-32B-Instruct-GPTQ-Int4")
+    parser.add_argument("--model", default="huihui-ai/Qwen2.5-VL-32B-Instruct-abliterated")
     parser.add_argument("--port", type=int, default=8002)
     parser.add_argument("--gpu-frac", type=float, default=0.35)
     args = parser.parse_args()
