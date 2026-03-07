@@ -17,7 +17,7 @@
     ],
     "presets": [
         {
-          "name": "Qwen3-80B Text (3 GPU allocation)",
+          "name": "Qwen3-80B Text (3 GPU split)",
           "defaults": {
             "VLLM_MODEL": "huihui-ai/Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated",
             "TENSOR_PARALLEL": "3",
@@ -25,7 +25,7 @@
           }
         },
         {
-          "name": "Vision + Text + Video (7 GPU split: 3+2+2)",
+          "name": "Vision(2) + Text(3) + Video(2) split",
           "defaults": {
             "VLLM_MODEL": "huihui-ai/Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated",
             "TENSOR_PARALLEL": "3",

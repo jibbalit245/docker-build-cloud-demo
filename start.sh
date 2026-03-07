@@ -105,7 +105,7 @@ download_model() {
     local MARKER_PATH="$DIR/$MARKER_FILE"
 
     if [ -d "$DIR" ] && [ ! -f "$MARKER_PATH" ]; then
-        echo "[MODELS] $NAME cache exists but is incomplete (missing $MARKER_FILE). Re-downloading..."
+        echo "[MODELS] $NAME cache exists but is incomplete (missing $MARKER_FILE). Removing incomplete cache and re-downloading..."
         rm -rf "$DIR"
     fi
 
