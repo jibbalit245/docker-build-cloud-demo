@@ -11,10 +11,11 @@ ENV DEBIAN_FRONTEND=noninteractive \
     MODEL_DIR=/workspace/models \
     VLLM_TP=1
 
-# System deps
+# System deps - zstd required for Ollama installer
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl wget git ffmpeg libsm6 libxext6 \
     libglib2.0-0 libgl1-mesa-glx build-essential openssh-server \
+    zstd \
     && rm -rf /var/lib/apt/lists/*
 
 # Ollama
@@ -58,15 +59,6 @@ COPY start.sh /start.sh
 
 RUN chmod +x /start.sh
 
-# Ports:
-# 8000 = unified gateway (OpenAI-compatible)
-# 8001 = vLLM (Qwen3-Next-80B-A3B)
-# 8002 = vision server (Qwen2.5-VL-32B)
-# 8003 = Wan2.2 video server
-# 8888 = Jupyter Lab
-# 11434 = Ollama (Lilith Whisper)
 EXPOSE 8000 8001 8002 8003 8888 11434 22
-
 VOLUME ["/workspace"]
-
 CMD ["/start.sh"]
