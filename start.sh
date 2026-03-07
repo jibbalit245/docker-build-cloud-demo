@@ -139,9 +139,62 @@ download_model() {
     fi
 }
 
+reverse_name_matches() {
+    local LEFT=$1
+    local RIGHT=$2
+    local INDEX
+
+    if [ "${#LEFT}" -ne "${#RIGHT}" ]; then
+        return 1
+    fi
+
+    for ((INDEX=${#LEFT}-1; INDEX>=0; INDEX--)); do
+        if [ "${LEFT:$INDEX:1}" != "${RIGHT:$INDEX:1}" ]; then
+            return 1
+        fi
+    done
+}
+
+name_in_allowed_set() {
+    local CANDIDATE=$1
+    shift
+    local ALLOWED_NAME
+
+    for ALLOWED_NAME in "$@"; do
+        if reverse_name_matches "$CANDIDATE" "$ALLOWED_NAME"; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+purge_non_target_hf_models() {
+    local TARGET_HF_MODEL_DIRS=(
+        "Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated"
+        "Qwen2.5-VL-32B-Instruct-abliterated"
+        "Wan2.2-T2V-14B"
+    )
+    local MODEL_DIR
+    local DIR_NAME
+
+    for MODEL_DIR in /workspace/hf_cache/*; do
+        if [ ! -d "$MODEL_DIR" ]; then
+            continue
+        fi
+
+        DIR_NAME="$(basename "$MODEL_DIR")"
+        if ! name_in_allowed_set "$DIR_NAME" "${TARGET_HF_MODEL_DIRS[@]}"; then
+            echo "[MODELS] Removing non-target HF model cache: $DIR_NAME"
+            rm -rf "$MODEL_DIR"
+        fi
+    done
+}
+
 download_model "huihui-ai/Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated" "config.json"
 download_model "huihui-ai/Qwen2.5-VL-32B-Instruct-abliterated" "config.json"
 download_model "Wan-AI/Wan2.2-T2V-14B" "model_index.json"
+purge_non_target_hf_models
 log_phase "phase=models status=download_completed"
 
 # Returns local Ollama model identifiers (NAME column, including tags) one per line.
@@ -180,6 +233,19 @@ if ! printf '%s\n' "$OLLAMA_LOCAL_MODELS" | grep -Fxq "$OLLAMA_MODEL_NAME"; then
             echo "[OLLAMA] FATAL: Lilith pull failed"
             exit 1
         }
+fi
+if OLLAMA_LOCAL_MODELS="$(list_ollama_models)"; then
+    while IFS= read -r MODEL_NAME; do
+        if [ -z "$MODEL_NAME" ]; then
+            continue
+        fi
+
+        if ! name_in_allowed_set "$MODEL_NAME" "$OLLAMA_MODEL_NAME"; then
+            echo "[OLLAMA] Removing non-target local model: $MODEL_NAME"
+            ollama rm "$MODEL_NAME" >> /workspace/logs/ollama_pull.log 2>&1 \
+                || echo "[OLLAMA] WARNING: Failed to remove non-target model: $MODEL_NAME"
+        fi
+    done <<< "$OLLAMA_LOCAL_MODELS"
 fi
 log_phase "phase=models status=ollama_pull_completed"
 
