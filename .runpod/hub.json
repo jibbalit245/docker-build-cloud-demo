@@ -16,8 +16,8 @@
       "12.0"
     ],
     "presets": [
-      {
-          "name": "Qwen3-80B Text (3x RTX Pro 6000)",
+        {
+          "name": "Qwen3-80B Text (3 GPU allocation)",
           "defaults": {
             "VLLM_MODEL": "huihui-ai/Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated",
             "TENSOR_PARALLEL": "3",
@@ -25,7 +25,7 @@
           }
         },
         {
-          "name": "Vision + Text + Video (RTX Pro 6000 split)",
+          "name": "Vision + Text + Video (7 GPU split: 3+2+2)",
           "defaults": {
             "VLLM_MODEL": "huihui-ai/Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated",
             "TENSOR_PARALLEL": "3",
