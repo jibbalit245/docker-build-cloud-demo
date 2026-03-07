@@ -85,7 +85,7 @@ def resolve(model):
 def handler(job):
     inp = job.get("input", {})
     job_type = inp.get("type", "chat")      # chat | video | image_analyze
-    model    = inp.get("model", "qwen3-80b")
+    model    = inp.get("model", "huihui-ai/Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated")
     prompt   = inp.get("prompt", "")
     messages = inp.get("messages", [{"role": "user", "content": prompt}])
     max_tokens = inp.get("max_tokens", 512)
