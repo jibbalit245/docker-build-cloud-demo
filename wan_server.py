@@ -24,29 +24,30 @@ app = FastAPI(title="Wan2.2 Video Server", version="1.0.0")
 pipe = None
 model_dir = None
 device = "cuda" if torch.cuda.is_available() else "cpu"
+WAN_MODEL_NAME = "Wan2.2-T2V-14B"
 
 
 def load_wan_model(model_dir_: str):
     global pipe, model_dir
-    if os.path.basename(os.path.normpath(model_dir_)) == "Wan2.2-T2V-14B":
+    if os.path.basename(os.path.normpath(model_dir_)) == WAN_MODEL_NAME:
         t2v_path = model_dir_
     else:
-        t2v_path = os.path.join(model_dir_, "Wan2.2-T2V-14B")
+        t2v_path = os.path.join(model_dir_, WAN_MODEL_NAME)
     model_dir = t2v_path
 
     try:
         from diffusers import WanPipeline, WanImageToVideoPipeline
 
         if not os.path.exists(t2v_path):
-            print(f"[wan_server] Downloading Wan2.2-T2V-14B to {t2v_path}...")
+            print(f"[wan_server] Downloading {WAN_MODEL_NAME} to {t2v_path}...")
             from huggingface_hub import snapshot_download
             snapshot_download(
-                repo_id="Wan-AI/Wan2.2-T2V-14B",
+                repo_id=f"Wan-AI/{WAN_MODEL_NAME}",
                 local_dir=t2v_path,
                 ignore_patterns=["*.md", "*.txt"],
             )
 
-        print(f"[wan_server] Loading Wan2.2-T2V-14B from {t2v_path}...")
+        print(f"[wan_server] Loading {WAN_MODEL_NAME} from {t2v_path}...")
         pipe = WanPipeline.from_pretrained(
             t2v_path,
             torch_dtype=torch.bfloat16,
