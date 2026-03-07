@@ -48,7 +48,7 @@ download_model() {
 }
 
 download_model "huihui-ai/Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated"
-download_model "Qwen/Qwen2.5-VL-32B-Instruct-GPTQ-Int4"
+download_model "huihui-ai/Qwen2.5-VL-32B-Instruct-abliterated"
 download_model "Wan-AI/Wan2.2-T2V-14B"
 
 # Lilith Whisper via Ollama
@@ -133,7 +133,7 @@ python3 -m vllm.entrypoints.openai.api_server \
 # ── Vision Server (Qwen2.5-VL-32B) ─────────────────────
 echo "[SVC] Starting Qwen2.5-VL-32B vision server..."
 python3 /app/vl_server.py \
-    --model /workspace/hf_cache/Qwen2.5-VL-32B-Instruct-GPTQ-Int4 \
+    --model /workspace/hf_cache/Qwen2.5-VL-32B-Instruct-abliterated \
     --port 8002 \
     --gpu-frac 0.35 \
     > /workspace/logs/vl_server.log 2>&1 &
