@@ -6,7 +6,7 @@
   "config": {
     "runsOn": "GPU",
     "containerDiskInGb": 50,
-    "gpuCount": 2,
+    "gpuCount": 7,
     "gpuIds": "AMPERE_80",
     "allowedCudaVersions": [
       "12.4",
@@ -17,21 +17,21 @@
     ],
     "presets": [
       {
-        "name": "Qwen3-80B Text (2x H100)",
-        "defaults": {
-          "VLLM_MODEL": "huihui-ai/Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated",
-          "TENSOR_PARALLEL": "2",
-          "GPU_MEMORY_UTILIZATION": "0.85"
+          "name": "Qwen3-80B Text (3x RTX Pro 6000)",
+          "defaults": {
+            "VLLM_MODEL": "huihui-ai/Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated",
+            "TENSOR_PARALLEL": "3",
+            "GPU_MEMORY_UTILIZATION": "0.85"
+          }
+        },
+        {
+          "name": "Vision + Text + Video (RTX Pro 6000 split)",
+          "defaults": {
+            "VLLM_MODEL": "huihui-ai/Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated",
+            "TENSOR_PARALLEL": "3",
+            "GPU_MEMORY_UTILIZATION": "0.45"
+          }
         }
-      },
-      {
-        "name": "Vision + Text (2x H100)",
-        "defaults": {
-          "VLLM_MODEL": "huihui-ai/Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated",
-          "TENSOR_PARALLEL": "2",
-          "GPU_MEMORY_UTILIZATION": "0.45"
-        }
-      }
     ],
     "env": [
       {
@@ -86,8 +86,20 @@
           "description": "Number of GPUs to split the model across",
           "min": 1,
           "max": 8,
-          "default": 2
+          "default": 3
         }
+      },
+      {
+        "key": "VLLM_CUDA_DEVICES",
+        "value": "0,1,2"
+      },
+      {
+        "key": "VL_CUDA_DEVICES",
+        "value": "3,4"
+      },
+      {
+        "key": "WAN_CUDA_DEVICES",
+        "value": "5,6"
       },
       {
         "key": "GPU_MEMORY_UTILIZATION",

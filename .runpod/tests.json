@@ -42,8 +42,8 @@
     }
   ],
   "config": {
-    "gpuTypeId": "NVIDIA A100-SXM4-80GB",
-    "gpuCount": 2,
+    "gpuTypeId": "NVIDIA RTX PRO 6000",
+    "gpuCount": 7,
     "allowedCudaVersions": [
       "12.4",
       "12.3",
@@ -62,11 +62,23 @@
       },
       {
         "key": "TENSOR_PARALLEL",
-        "value": "2"
+        "value": "3"
       },
       {
         "key": "GPU_MEMORY_UTILIZATION",
         "value": "0.85"
+      },
+      {
+        "key": "VLLM_CUDA_DEVICES",
+        "value": "0,1,2"
+      },
+      {
+        "key": "VL_CUDA_DEVICES",
+        "value": "3,4"
+      },
+      {
+        "key": "WAN_CUDA_DEVICES",
+        "value": "5,6"
       }
     ]
   }

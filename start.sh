@@ -78,32 +78,61 @@ export VLLM_URL="${VLLM_URL:-http://127.0.0.1:8001}"
 export VL_URL="${VL_URL:-http://127.0.0.1:8002}"
 export WAN_URL="${WAN_URL:-http://127.0.0.1:8003}"
 export OLLAMA_URL="${OLLAMA_URL:-http://127.0.0.1:11434}"
+export VLLM_CUDA_DEVICES="${VLLM_CUDA_DEVICES:-}"
+export VL_CUDA_DEVICES="${VL_CUDA_DEVICES:-}"
+export WAN_CUDA_DEVICES="${WAN_CUDA_DEVICES:-}"
 
 # ══════════════════════════════════════════════════════
 # MODELS — pull from HuggingFace on first boot
 # ══════════════════════════════════════════════════════
 log_phase "phase=models status=download_started"
 
-download_model() {
-    local REPO=$1
-    local NAME=$(basename $REPO)
-    local DIR=/workspace/hf_cache/$NAME
-    if [ ! -d "$DIR" ]; then
-        echo "[MODELS] Downloading $REPO ..."
-        huggingface-cli download "$REPO" \
-            --local-dir "$DIR" \
-            --local-dir-use-symlinks False \
-            >> /workspace/logs/model_downloads.log 2>&1 \
-            && echo "[MODELS] $NAME done." \
-            || echo "[MODELS] WARNING: $NAME failed — check logs"
+run_with_optional_cuda() {
+    local CUDA_DEVICES=$1
+    shift
+    if [ -n "$CUDA_DEVICES" ]; then
+        CUDA_VISIBLE_DEVICES="$CUDA_DEVICES" "$@"
     else
-        echo "[MODELS] $NAME already cached, skipping."
+        "$@"
     fi
 }
 
-download_model "huihui-ai/Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated"
-download_model "huihui-ai/Qwen2.5-VL-32B-Instruct-abliterated"
-download_model "Wan-AI/Wan2.2-T2V-14B"
+download_model() {
+    local REPO=$1
+    local MARKER_FILE=$2
+    local NAME=$(basename $REPO)
+    local DIR=/workspace/hf_cache/$NAME
+    local MARKER_PATH="$DIR/$MARKER_FILE"
+
+    if [ -d "$DIR" ] && [ ! -f "$MARKER_PATH" ]; then
+        echo "[MODELS] $NAME cache exists but is incomplete (missing $MARKER_FILE). Re-downloading..."
+        rm -rf "$DIR"
+    fi
+
+    if [ ! -d "$DIR" ]; then
+        echo "[MODELS] Downloading $REPO ..."
+        if huggingface-cli download "$REPO" \
+            --local-dir "$DIR" \
+            --local-dir-use-symlinks False \
+            >> /workspace/logs/model_downloads.log 2>&1; then
+            echo "[MODELS] $NAME done."
+        else
+            echo "[MODELS] FATAL: $NAME failed — check logs"
+            return 1
+        fi
+    else
+        echo "[MODELS] $NAME already cached and complete, skipping."
+    fi
+
+    if [ ! -f "$MARKER_PATH" ]; then
+        echo "[MODELS] FATAL: $NAME missing required file $MARKER_FILE after download"
+        return 1
+    fi
+}
+
+download_model "huihui-ai/Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated" "config.json"
+download_model "huihui-ai/Qwen2.5-VL-32B-Instruct-abliterated" "config.json"
+download_model "Wan-AI/Wan2.2-T2V-14B" "model_index.json"
 log_phase "phase=models status=download_completed"
 
 # Lilith Whisper via Ollama
@@ -205,11 +234,11 @@ log_phase "phase=workflow status=services_starting"
 
 # ── vLLM (Qwen3-Next-80B-A3B) ─────────────────────────
 echo "[SVC] Starting vLLM..."
-python3 -m vllm.entrypoints.openai.api_server \
+run_with_optional_cuda "$VLLM_CUDA_DEVICES" python3 -m vllm.entrypoints.openai.api_server \
     --model /workspace/hf_cache/Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated \
     --port 8001 \
     --host 0.0.0.0 \
-    --tensor-parallel-size ${VLLM_TP:-1} \
+    --tensor-parallel-size "${VLLM_TP:-${TENSOR_PARALLEL:-1}}" \
     --gpu-memory-utilization 0.45 \
     --max-model-len 16384 \
     --enable-chunked-prefill \
@@ -219,7 +248,7 @@ VLLM_PID=$!
 
 # ── Vision Server (Qwen2.5-VL-32B) ─────────────────────
 echo "[SVC] Starting Qwen2.5-VL-32B vision server..."
-python3 /app/vl_server.py \
+run_with_optional_cuda "$VL_CUDA_DEVICES" python3 /app/vl_server.py \
     --model /workspace/hf_cache/Qwen2.5-VL-32B-Instruct-abliterated \
     --port 8002 \
     --gpu-frac 0.35 \
@@ -228,7 +257,7 @@ VL_PID=$!
 
 # ── Wan2.2 Video Server ─────────────────────────────────
 echo "[SVC] Starting Wan2.2..."
-python3 /app/wan_server.py \
+run_with_optional_cuda "$WAN_CUDA_DEVICES" python3 /app/wan_server.py \
     --model-dir /workspace/hf_cache \
     --port 8003 \
     > /workspace/logs/wan_server.log 2>&1 &
