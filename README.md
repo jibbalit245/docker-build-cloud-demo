@@ -12,15 +12,18 @@ The FastAPI gateway (`gateway.py`, port `8000`) is the pipeline router between c
 
 ```mermaid
 flowchart TD
-    A[Client / Open WebUI / RunPod job] --> B[FastAPI Gateway :8000]
+    A[Client / Open WebUI / RunPod job] --> N[NGINX edge<br/>TLS, rate-limit, optional auth]
+    N --> B[FastAPI Router :8000]
 
-    B -->|model=qwen3-80b| C[vLLM :8001]
-    B -->|model=vision| D[Qwen2.5-VL server :8002]
-    B -->|model=wan2.2| E[Wan2.2 server :8003]
-    B -->|model=lilith/whisper| F[Ollama :11434]
+    B -->|model=qwen3-80b| C[Qwen3-80B on vLLM :8001]
+    B -->|model=vision / qwen2.5-vl| D[Qwen2.5-VL-32B (Transformers) :8002]
+    B -->|model=lilith / whisper| E[Lilith-Whisper on Ollama :11434]
+    B -->|model=wan2.2 / video| F[Wan2.2-T2V (Transformers) :8003]
 
-    C --> G[Response]
-    D --> G
-    E --> G
-    F --> G
+    F --> P[Optional post-processing]
+    C --> R[Unified response path]
+    D --> R
+    E --> R
+    P --> R
+    F --> R
 ```
