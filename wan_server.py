@@ -28,11 +28,14 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 
 def load_wan_model(model_dir_: str):
     global pipe, model_dir
-    model_dir = model_dir_
+    if os.path.basename(os.path.normpath(model_dir_)) == "Wan2.2-T2V-14B":
+        t2v_path = model_dir_
+    else:
+        t2v_path = os.path.join(model_dir_, "Wan2.2-T2V-14B")
+    model_dir = t2v_path
 
     try:
         from diffusers import WanPipeline, WanImageToVideoPipeline
-        t2v_path = os.path.join(model_dir_, "Wan2.2-T2V-14B")
 
         if not os.path.exists(t2v_path):
             print(f"[wan_server] Downloading Wan2.2-T2V-14B to {t2v_path}...")
@@ -133,7 +136,7 @@ def generate_video(req: VideoRequest):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model-dir", default="/workspace/models/wan2.2")
+    parser.add_argument("--model-dir", default="/workspace/hf_cache/Wan2.2-T2V-14B")
     parser.add_argument("--port", type=int, default=8003)
     parser.add_argument("--no-autoload", action="store_true",
                         help="Skip model loading at startup (load manually via /load)")

@@ -10,6 +10,12 @@ WORKFLOW_LOG=/workspace/logs/workflow.log
 SERVICE_MAP=/workspace/logs/service_map.json
 OLLAMA_MODEL_NAME_DEFAULT="hf.co/bartowski/Liliths-Whisper-L3.3-70b-0.2a.i1-Q4_K_M-GGUF:latest"
 OLLAMA_MODEL_NAME="${OLLAMA_MODEL_NAME:-$OLLAMA_MODEL_NAME_DEFAULT}"
+QWEN3_MODEL_REPO="huihui-ai/Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated"
+QWEN3_MODEL_DIR="/workspace/hf_cache/Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated"
+VISION_MODEL_REPO="huihui-ai/Qwen2.5-VL-32B-Instruct-abliterated"
+VISION_MODEL_DIR="/workspace/hf_cache/Qwen2.5-VL-32B-Instruct-abliterated"
+WAN_MODEL_REPO="Wan-AI/Wan2.2-T2V-14B"
+WAN_MODEL_DIR="/workspace/hf_cache/Wan2.2-T2V-14B"
 
 log_phase() {
         local MSG=$1
@@ -24,17 +30,17 @@ write_service_map() {
         "qwen3-80b": {
             "backend": "vllm",
             "url": "http://127.0.0.1:8001",
-            "model": "huihui-ai/Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated"
+            "model": "$QWEN3_MODEL_REPO"
         },
         "vision": {
             "backend": "vl_server",
             "url": "http://127.0.0.1:8002",
-            "model": "huihui-ai/Qwen2.5-VL-32B-Instruct-abliterated"
+            "model": "$VISION_MODEL_REPO"
         },
         "wan2.2": {
             "backend": "wan_server",
             "url": "http://127.0.0.1:8003",
-            "model": "Wan-AI/Wan2.2-T2V-14B"
+            "model": "$WAN_MODEL_REPO"
         },
         "lilith": {
             "backend": "ollama",
@@ -185,9 +191,9 @@ name_contains_allowed_fragment() {
 
 purge_non_target_hf_models() {
     local TARGET_HF_MODEL_NAME_FRAGMENTS=(
-        "Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated"
-        "Qwen2.5-VL-32B-Instruct-abliterated"
-        "Wan2.2-T2V-14B"
+        "$(basename "$QWEN3_MODEL_DIR")"
+        "$(basename "$VISION_MODEL_DIR")"
+        "$(basename "$WAN_MODEL_DIR")"
     )
     local MODEL_DIR
     local DIR_NAME
@@ -205,9 +211,9 @@ purge_non_target_hf_models() {
     done
 }
 
-download_model "huihui-ai/Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated" "config.json"
-download_model "huihui-ai/Qwen2.5-VL-32B-Instruct-abliterated" "config.json"
-download_model "Wan-AI/Wan2.2-T2V-14B" "model_index.json"
+download_model "$QWEN3_MODEL_REPO" "config.json"
+download_model "$VISION_MODEL_REPO" "config.json"
+download_model "$WAN_MODEL_REPO" "model_index.json"
 purge_non_target_hf_models
 log_phase "phase=models status=download_completed"
 
@@ -346,7 +352,7 @@ log_phase "phase=workflow status=services_starting"
 # vLLM (Qwen3-Next-80B-A3B)
 echo "[SVC] Starting vLLM..."
 run_with_optional_cuda "$VLLM_CUDA_DEVICES" python3 -m vllm.entrypoints.openai.api_server \
-    --model /workspace/hf_cache/Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated \
+    --model "$QWEN3_MODEL_DIR" \
     --port 8001 \
     --host 0.0.0.0 \
     --tensor-parallel-size "$VLLM_TP" \
@@ -361,7 +367,7 @@ wait_for_url "vLLM" "$VLLM_URL/health" 180 5
 # Vision Server (Qwen2.5-VL-32B)
 echo "[SVC] Starting Qwen2.5-VL-32B vision server..."
 run_with_optional_cuda "$VL_CUDA_DEVICES" python3 /app/vl_server.py \
-    --model /workspace/hf_cache/Qwen2.5-VL-32B-Instruct-abliterated \
+    --model "$VISION_MODEL_DIR" \
     --port 8002 \
     --gpu-frac 0.35 \
     > /workspace/logs/vl_server.log 2>&1 &
@@ -371,7 +377,7 @@ wait_for_url "Vision" "$VL_URL/health" 180 5
 # Wan2.2 Video Server
 echo "[SVC] Starting Wan2.2..."
 run_with_optional_cuda "$WAN_CUDA_DEVICES" python3 /app/wan_server.py \
-    --model-dir /workspace/hf_cache \
+    --model-dir "$WAN_MODEL_DIR" \
     --port 8003 \
     > /workspace/logs/wan_server.log 2>&1 &
 WAN_PID=$!
