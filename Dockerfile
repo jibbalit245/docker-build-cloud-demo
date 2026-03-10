@@ -14,7 +14,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl wget git ffmpeg libsm6 libxext6 \
     libglib2.0-0 libgl1-mesa-glx build-essential \
-    openssh-server zstd \
+    openssh-server zstd ripgrep bubblewrap socat \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl -fsSL https://ollama.com/install.sh | sh
