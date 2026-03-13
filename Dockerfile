@@ -29,6 +29,8 @@ RUN pip install --no-cache-dir --upgrade pip && \
     "uvicorn[standard]" \
     "httpx" \
     "pydantic" \
+    "python-multipart" \
+    "aiofiles" \
     "huggingface_hub[cli]" \
     "qwen-vl-utils" \
     "sentencepiece" \
@@ -55,6 +57,7 @@ COPY gateway.py /app/gateway.py
 COPY vl_server.py /app/vl_server.py
 COPY wan_server.py /app/wan_server.py
 COPY runpod_handler.py /app/runpod_handler.py
+COPY chat_app.py /app/chat_app.py
 COPY start.sh /start.sh
 RUN chmod +x /start.sh
 

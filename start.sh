@@ -10,6 +10,9 @@ WORKFLOW_LOG=/workspace/logs/workflow.log
 SERVICE_MAP=/workspace/logs/service_map.json
 OLLAMA_MODEL_NAME_DEFAULT="hf.co/bartowski/Liliths-Whisper-L3.3-70b-0.2a.i1-Q4_K_M-GGUF:latest"
 OLLAMA_MODEL_NAME="${OLLAMA_MODEL_NAME:-$OLLAMA_MODEL_NAME_DEFAULT}"
+QWEN3_CODER_MODEL="${QWEN3_CODER_MODEL:-hf.co/huihui-ai/Huihui-Qwen3-Coder-480B-A35B-Instruct-abliterated-GGUF:Q4_K_M}"
+SSH_PORT="${SSH_PORT:-22}"
+CHAT_PORT="${CHAT_PORT:-8888}"
 
 log_phase() {
         local MSG=$1
@@ -20,11 +23,17 @@ write_service_map() {
         cat > "$SERVICE_MAP" <<EOF
 {
     "gateway": "http://0.0.0.0:8000",
+    "chat_app": "http://0.0.0.0:${CHAT_PORT}",
     "routes": {
         "qwen3-80b": {
             "backend": "vllm",
             "url": "http://127.0.0.1:8001",
             "model": "huihui-ai/Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated"
+        },
+        "qwen3-coder": {
+            "backend": "ollama",
+            "url": "http://127.0.0.1:11434",
+            "model": "$QWEN3_CODER_MODEL"
         },
         "vision": {
             "backend": "vl_server",
@@ -60,8 +69,8 @@ if [ -n "${PUBLIC_KEY}" ]; then
     echo "${PUBLIC_KEY}" >> /root/.ssh/authorized_keys
     chmod 700 /root/.ssh && chmod 600 /root/.ssh/authorized_keys
 fi
-/usr/sbin/sshd -D &
-log_phase "phase=bootstrap status=ssh_started"
+/usr/sbin/sshd -D -p "${SSH_PORT}" &
+log_phase "phase=bootstrap status=ssh_started port=${SSH_PORT}"
 
 # ── HuggingFace token ──────────────────────────────────
 if [ -n "${HF_TOKEN}" ]; then
@@ -106,7 +115,7 @@ download_model "huihui-ai/Qwen2.5-VL-32B-Instruct-abliterated"
 download_model "Wan-AI/Wan2.2-T2V-14B"
 log_phase "phase=models status=download_completed"
 
-# Lilith Whisper via Ollama
+# Lilith Whisper + Qwen3-Coder via Ollama
 OLLAMA_MODELS=/workspace/ollama_models ollama serve > /workspace/logs/ollama.log 2>&1 &
 log_phase "phase=models status=ollama_started_for_pull"
 for i in $(seq 1 20); do
@@ -123,6 +132,17 @@ if ! ollama list 2>/dev/null | grep -qi "lilith"; then
             echo "[OLLAMA] FATAL: Lilith pull failed"
             exit 1
         }
+fi
+# Pull Qwen3-Coder GGUF (non-fatal: pod can still serve other models if this fails)
+if ! ollama list 2>/dev/null | grep -qiF "qwen3-coder" && \
+   ! ollama list 2>/dev/null | grep -qiF "480b"; then
+    echo "[OLLAMA] Pulling Qwen3-Coder: $QWEN3_CODER_MODEL ..."
+    ollama pull "$QWEN3_CODER_MODEL" \
+        >> /workspace/logs/ollama_pull.log 2>&1 \
+        && echo "[OLLAMA] Qwen3-Coder done." \
+        || echo "[OLLAMA] WARNING: Qwen3-Coder pull failed — check ollama_pull.log"
+else
+    echo "[OLLAMA] Qwen3-Coder already present, skipping."
 fi
 log_phase "phase=models status=ollama_pull_completed"
 
@@ -276,6 +296,20 @@ open-webui serve \
 WEBUI_PID=$!
 log_phase "phase=services status=webui_started"
 
+# ── Chat App ─────────────────────────────────────────────
+echo "[SVC] Starting Chat App on :${CHAT_PORT}..."
+GATEWAY_URL="http://127.0.0.1:8000" \
+CHAT_PORT="${CHAT_PORT}" \
+CHAT_API_KEY="${CHAT_API_KEY:-}" \
+CHAT_DEFAULT_MODEL="${CHAT_DEFAULT_MODEL:-qwen3-coder}" \
+uvicorn chat_app:app \
+    --host 0.0.0.0 \
+    --port "${CHAT_PORT}" \
+    --workers 1 \
+    > /workspace/logs/chat_app.log 2>&1 &
+CHAT_PID=$!
+log_phase "phase=services status=chat_app_started port=${CHAT_PORT}"
+
 write_service_map
 log_phase "phase=workflow status=service_map_written path=$SERVICE_MAP"
 
@@ -300,13 +334,15 @@ echo "  All services launched!"
 echo "  Downloads running in background."
 echo "  Logs: /workspace/logs/"
 echo "  Open WebUI  -> :3000"
+echo "  Chat App    -> :${CHAT_PORT}  (API key in chat_app.log)"
 echo "  Gateway     -> :8000/health"
+echo "  SSH         -> port ${SSH_PORT}"
 echo "  Service map -> /workspace/logs/service_map.json"
 echo "  Workflow    -> /workspace/logs/workflow.log"
 echo "================================================"
 
 # Keep container alive while core services run, and fail fast if any exits.
-SERVICE_PIDS=("$VLLM_PID" "$VL_PID" "$WAN_PID" "$GATEWAY_PID" "$WEBUI_PID")
+SERVICE_PIDS=("$VLLM_PID" "$VL_PID" "$WAN_PID" "$GATEWAY_PID" "$WEBUI_PID" "$CHAT_PID")
 wait -n "${SERVICE_PIDS[@]}"
 EXIT_CODE=$?
 echo "[WORKFLOW] A core service exited unexpectedly (code=$EXIT_CODE)."

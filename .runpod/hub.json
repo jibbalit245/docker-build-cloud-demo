@@ -1,6 +1,6 @@
 {
-  "title": "Omni-Stack: Multi-Model AI",
-  "description": "Unified AI stack serving Qwen3-Next-80B, Qwen2.5-VL-32B (vision), Lilith-Whisper-70B, and Wan2.2 (video generation) through a single OpenAI-compatible gateway.",
+  "title": "Omni-Stack: Multi-Model AI + Chat",
+  "description": "Unified AI stack: Qwen3-Coder-480B, Qwen3-Next-80B, Qwen2.5-VL-32B (vision), Lilith-Whisper-70B, and Wan2.2 (video). Includes a built-in chat webapp (port 8888) with multi-file/image upload and API-key permission gate. OpenAI-compatible gateway on :8000. SSH on configurable port.",
   "type": "serverless",
   "category": "language",
   "config": {
@@ -17,17 +17,19 @@
     ],
     "presets": [
       {
-        "name": "Qwen3-80B Text (2x H100)",
+        "name": "Qwen3-Coder + 80B Text (2x H100)",
         "defaults": {
           "VLLM_MODEL": "huihui-ai/Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated",
+          "QWEN3_CODER_MODEL": "hf.co/huihui-ai/Huihui-Qwen3-Coder-480B-A35B-Instruct-abliterated-GGUF:Q4_K_M",
           "TENSOR_PARALLEL": "2",
           "GPU_MEMORY_UTILIZATION": "0.85"
         }
       },
       {
-        "name": "Vision + Text (2x H100)",
+        "name": "Vision + Coder (2x H100)",
         "defaults": {
           "VLLM_MODEL": "huihui-ai/Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated",
+          "QWEN3_CODER_MODEL": "hf.co/huihui-ai/Huihui-Qwen3-Coder-480B-A35B-Instruct-abliterated-GGUF:Q4_K_M",
           "TENSOR_PARALLEL": "2",
           "GPU_MEMORY_UTILIZATION": "0.45"
         }
@@ -64,6 +66,70 @@
           "name": "HuggingFace Token",
           "type": "string",
           "description": "Your HuggingFace access token for downloading models",
+          "default": "",
+          "advanced": false
+        }
+      },
+      {
+        "key": "QWEN3_CODER_MODEL",
+        "input": {
+          "name": "Qwen3-Coder GGUF Model Tag",
+          "type": "string",
+          "description": "Ollama-compatible tag for the Qwen3-Coder 480B GGUF model. Use hf.co/ prefix to pull directly from HuggingFace.",
+          "default": "hf.co/huihui-ai/Huihui-Qwen3-Coder-480B-A35B-Instruct-abliterated-GGUF:Q4_K_M",
+          "advanced": false
+        }
+      },
+      {
+        "key": "CHAT_API_KEY",
+        "input": {
+          "name": "Chat App API Key",
+          "type": "string",
+          "description": "Access key for the built-in chat webapp on port 8888. If left blank a random key is auto-generated and printed to /workspace/logs/chat_app.log on first boot.",
+          "default": "",
+          "advanced": false
+        }
+      },
+      {
+        "key": "CHAT_DEFAULT_MODEL",
+        "input": {
+          "name": "Chat Default Model",
+          "type": "string",
+          "description": "Default model selected in the chat UI (qwen3-coder, qwen3-80b, vision, lilith)",
+          "default": "qwen3-coder",
+          "advanced": true
+        }
+      },
+      {
+        "key": "CHAT_PORT",
+        "input": {
+          "name": "Chat App Port",
+          "type": "number",
+          "description": "Port for the built-in chat webapp",
+          "min": 1024,
+          "max": 65535,
+          "default": 8888,
+          "advanced": true
+        }
+      },
+      {
+        "key": "SSH_PORT",
+        "input": {
+          "name": "SSH Port",
+          "type": "number",
+          "description": "Port the SSH server listens on. Ensure this matches a port exposed in your RunPod template.",
+          "min": 1,
+          "max": 65535,
+          "default": 22,
+          "advanced": true
+        }
+      },
+      {
+        "key": "PUBLIC_KEY",
+        "input": {
+          "name": "SSH Public Key",
+          "type": "string",
+          "description": "Your SSH public key (e.g. contents of ~/.ssh/id_rsa.pub). Authorizes passwordless SSH access to the pod.",
           "default": "",
           "advanced": false
         }
