@@ -37,12 +37,18 @@ SERVICES = {
     "llama":       OLLAMA_URL,
     "l3.3":        OLLAMA_URL,
     "whisper":     OLLAMA_URL,
+    "qwen3-coder": OLLAMA_URL,
+    "coder":       OLLAMA_URL,
 }
 DEFAULT_TEXT = VLLM_URL
 
 OLLAMA_MODEL_NAME = os.getenv(
     "OLLAMA_MODEL_NAME",
     "hf.co/bartowski/Liliths-Whisper-L3.3-70b-0.2a.i1-Q4_K_M-GGUF:latest",
+)
+QWEN3_CODER_MODEL = os.getenv(
+    "QWEN3_CODER_MODEL",
+    "hf.co/huihui-ai/Huihui-Qwen3-Coder-480B-A35B-Instruct-abliterated-GGUF:Q4_K_M",
 )
 OLLAMA_MODEL_CANDIDATES = [
     m.strip() for m in os.getenv("OLLAMA_MODEL_CANDIDATES", "").split(",") if m.strip()
@@ -57,8 +63,11 @@ OLLAMA_ALIAS_MODELS = {
     "llama",
     "l3.3",
     "lilith-l3.3-70b",
+    "qwen3-coder",
+    "coder",
 }
 OLLAMA_MODEL_CACHE = None
+OLLAMA_CODER_MODEL_CACHE = None
 
 
 def _request_id(request: Request) -> str:
@@ -123,6 +132,10 @@ def resolve_service(model: str) -> str:
         "liliths-whisper-l3.3-70b-0.2a.i1-q4_k_m.gguf": "lilith",
         "liliths-whisper-l3.3-70b-0.2a.i1-q5_k_m.gguf": "lilith",
         "whisper": "lilith",
+        "qwen3-coder": "qwen3-coder",
+        "coder": "qwen3-coder",
+        "huihui-ai/huihui-qwen3-coder-480b-a35b-instruct-abliterated-gguf": "qwen3-coder",
+        "huihui-qwen3-coder-480b-a35b-instruct-abliterated-gguf": "qwen3-coder",
     }
     m = alias_map.get(m, m)
 
@@ -155,16 +168,22 @@ def _stream_chunk_from_response(payload: dict) -> dict:
 
 async def _resolve_ollama_model(requested_model: str, req_id: str) -> str:
     """Pick an installed Ollama model, even when versioned tags differ."""
-    global OLLAMA_MODEL_CACHE
+    global OLLAMA_MODEL_CACHE, OLLAMA_CODER_MODEL_CACHE
 
     requested = (requested_model or "").strip()
     requested_lower = requested.lower()
+
+    # Route coder alias to the coder model
+    is_coder = requested_lower in ("qwen3-coder", "coder") or \
+        "qwen3-coder" in requested_lower or "qwen3_coder" in requested_lower
 
     # If caller explicitly passed a concrete Ollama tag, honor it.
     if requested and requested_lower not in OLLAMA_ALIAS_MODELS and (":" in requested or "/" in requested):
         return requested
 
-    if OLLAMA_MODEL_CACHE:
+    if is_coder and OLLAMA_CODER_MODEL_CACHE:
+        return OLLAMA_CODER_MODEL_CACHE
+    if not is_coder and OLLAMA_MODEL_CACHE:
         return OLLAMA_MODEL_CACHE
 
     try:
@@ -174,6 +193,26 @@ async def _resolve_ollama_model(requested_model: str, req_id: str) -> str:
             names = [m.get("name") for m in data.get("models", []) if isinstance(m, dict) and m.get("name")]
     except Exception:
         names = []
+
+    name_set = set(names)
+
+    if is_coder:
+        coder_candidates = [QWEN3_CODER_MODEL] if QWEN3_CODER_MODEL else []
+        for candidate in coder_candidates:
+            if candidate in name_set:
+                OLLAMA_CODER_MODEL_CACHE = candidate
+                print(f"[gateway][{req_id}] ollama_coder_model={OLLAMA_CODER_MODEL_CACHE} (exact)")
+                return OLLAMA_CODER_MODEL_CACHE
+        for name in names:
+            lname = name.lower()
+            if "qwen3-coder" in lname or "qwen3_coder" in lname:
+                OLLAMA_CODER_MODEL_CACHE = name
+                print(f"[gateway][{req_id}] ollama_coder_model={OLLAMA_CODER_MODEL_CACHE} (discovered)")
+                return OLLAMA_CODER_MODEL_CACHE
+        # Fallback
+        OLLAMA_CODER_MODEL_CACHE = QWEN3_CODER_MODEL or "qwen3-coder:latest"
+        print(f"[gateway][{req_id}] ollama_coder_model={OLLAMA_CODER_MODEL_CACHE} (fallback)")
+        return OLLAMA_CODER_MODEL_CACHE
 
     candidates = []
     if OLLAMA_MODEL_NAME:
@@ -186,7 +225,6 @@ async def _resolve_ollama_model(requested_model: str, req_id: str) -> str:
         "lilith-whisper:latest",
     ])
 
-    name_set = set(names)
     for candidate in candidates:
         if candidate in name_set:
             OLLAMA_MODEL_CACHE = candidate
@@ -249,6 +287,7 @@ async def list_models():
         "object": "list",
         "data": [
             {"id": "qwen3-80b",        "object": "model", "type": "text",   "backend": "vllm:8001"},
+            {"id": "qwen3-coder",      "object": "model", "type": "text",   "backend": "ollama:11434"},
             {"id": "qwen2.5-vl-32b",   "object": "model", "type": "vision", "backend": "vl_server:8002"},
             {"id": "lilith-l3.3-70b",  "object": "model", "type": "text",   "backend": "ollama:11434"},
             {"id": "wan2.2",           "object": "model", "type": "video",  "backend": "wan_server:8003"},
@@ -273,6 +312,7 @@ async def workflow():
         },
         "aliases": {
             "text": ["qwen3-80b", "qwen3", "huihui-ai/Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated"],
+            "coder": ["qwen3-coder", "coder", QWEN3_CODER_MODEL],
             "vision": ["vision", "qwen2.5-vl", "huihui-ai/Qwen2.5-VL-32B-Instruct-abliterated"],
             "video": ["wan2.2", "wan", "Wan-AI/Wan2.2-T2V-14B"],
             "ollama": ["lilith", "whisper", OLLAMA_MODEL_NAME],
