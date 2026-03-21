@@ -1,0 +1,71 @@
+FROM runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04
+
+LABEL maintainer="omni-stack"
+LABEL description="Omni-Stack Training Pod: QLoRA/SFT/DPO/GRPO fine-tuning with JupyterLab"
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    HF_HOME=/workspace/hf_cache \
+    MODEL_DIR=/workspace/models \
+    DATASETS_DIR=/workspace/datasets
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl wget git ffmpeg libsm6 libxext6 \
+    libglib2.0-0 libgl1-mesa-glx build-essential \
+    openssh-server zstd ripgrep \
+    && rm -rf /var/lib/apt/lists/*
+
+# Core training stack
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir \
+    "transformers>=4.47.0" \
+    "accelerate>=0.34.0" \
+    "bitsandbytes>=0.43.0" \
+    "peft>=0.12.0" \
+    "trl>=0.9.0" \
+    "datasets>=2.20.0" \
+    "huggingface_hub[cli]" \
+    "sentencepiece" \
+    "tiktoken" \
+    "einops" \
+    "fastapi" \
+    "uvicorn[standard]" \
+    "httpx" \
+    "pydantic" \
+    "runpod"
+
+# Fast fine-tuning with Unsloth (CPU build fallback for image build; GPU used at runtime)
+RUN pip install --no-cache-dir \
+    "unsloth[colab-new]" \
+    || pip install --no-cache-dir \
+    "unsloth" \
+    || echo "[WARN] unsloth install failed — will retry at runtime"
+
+# Experiment tracking and evaluation utilities
+RUN pip install --no-cache-dir \
+    "wandb" \
+    "tensorboard" \
+    "evaluate" \
+    "rouge-score" \
+    "nltk" \
+    "scikit-learn"
+
+# JupyterLab for interactive training
+RUN pip install --no-cache-dir \
+    "jupyterlab>=4.0" \
+    "ipywidgets" \
+    "notebook" \
+    "nbconvert"
+
+WORKDIR /app
+COPY train.sh /train.sh
+RUN chmod +x /train.sh
+
+RUN mkdir -p /workspace/notebooks
+COPY notebooks/quickstart_train.ipynb /workspace/notebooks/quickstart_train.ipynb
+
+EXPOSE 8888 22
+
+VOLUME ["/workspace"]
+
+CMD ["/train.sh"]
