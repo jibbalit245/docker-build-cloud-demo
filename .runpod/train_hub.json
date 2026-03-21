@@ -1,0 +1,227 @@
+{
+  "title": "Omni-Stack Training Pod",
+  "description": "Interactive QLoRA / SFT / DPO / GRPO fine-tuning environment. Downloads the base model and all 30 training datasets on first boot, then launches JupyterLab on :8888 with unsloth, TRL, PEFT, and W&B pre-installed.",
+  "type": "pod",
+  "category": "language",
+  "config": {
+    "runsOn": "GPU",
+    "containerDiskInGb": 50,
+    "volumeInGb": 1500,
+    "volumeMountPath": "/workspace",
+    "gpuCount": 1,
+    "gpuIds": "AMPERE_80",
+    "allowedCudaVersions": [
+      "12.4",
+      "12.3",
+      "12.2",
+      "12.1",
+      "12.0"
+    ],
+    "ports": "8888/http,22/tcp",
+    "imageName": "westllc/omni-stack-train:latest",
+    "dockerArgs": "",
+    "startJupyter": false,
+    "presets": [
+      {
+        "name": "QLoRA — Qwen3-80B (1x A100 80GB)",
+        "defaults": {
+          "TRAIN_BASE_MODEL": "huihui-ai/Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated",
+          "TRAIN_METHOD": "qlora",
+          "LORA_RANK": "64",
+          "LORA_ALPHA": "128",
+          "TRAIN_BATCH_SIZE": "2",
+          "GRAD_ACCUM_STEPS": "8",
+          "LEARNING_RATE": "2e-4",
+          "NUM_TRAIN_EPOCHS": "1",
+          "MAX_SEQ_LENGTH": "4096"
+        }
+      },
+      {
+        "name": "SFT Full-Finetune — Qwen2.5-VL-32B (2x A100 80GB)",
+        "defaults": {
+          "TRAIN_BASE_MODEL": "huihui-ai/Qwen2.5-VL-32B-Instruct-abliterated",
+          "TRAIN_METHOD": "sft",
+          "LORA_RANK": "0",
+          "TRAIN_BATCH_SIZE": "1",
+          "GRAD_ACCUM_STEPS": "16",
+          "LEARNING_RATE": "5e-5",
+          "NUM_TRAIN_EPOCHS": "1",
+          "MAX_SEQ_LENGTH": "2048"
+        }
+      },
+      {
+        "name": "DPO / RLHF — Abliteration (1x A100 80GB)",
+        "defaults": {
+          "TRAIN_BASE_MODEL": "huihui-ai/Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated",
+          "TRAIN_DATASET": "abliterated-distill-30k",
+          "TRAIN_METHOD": "dpo",
+          "LORA_RANK": "32",
+          "LORA_ALPHA": "64",
+          "TRAIN_BATCH_SIZE": "2",
+          "GRAD_ACCUM_STEPS": "8",
+          "LEARNING_RATE": "5e-5",
+          "NUM_TRAIN_EPOCHS": "1",
+          "MAX_SEQ_LENGTH": "2048"
+        }
+      }
+    ],
+    "env": [
+      {
+        "key": "HF_HOME",
+        "value": "/workspace/hf_cache"
+      },
+      {
+        "key": "HF_TOKEN",
+        "input": {
+          "name": "HuggingFace Token",
+          "type": "string",
+          "description": "Your HuggingFace access token for downloading gated models and datasets",
+          "default": "",
+          "advanced": false
+        }
+      },
+      {
+        "key": "TRAIN_BASE_MODEL",
+        "input": {
+          "name": "Base Model",
+          "type": "string",
+          "description": "HuggingFace model ID to use as the starting checkpoint for fine-tuning",
+          "default": "huihui-ai/Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated",
+          "advanced": false
+        }
+      },
+      {
+        "key": "TRAIN_DATASET",
+        "input": {
+          "name": "Training Dataset",
+          "type": "string",
+          "description": "Folder name under /workspace/datasets/ to use for training (e.g. OpenHermes-2.5, abliterated-distill-30k, UltraFeedback)",
+          "default": "OpenHermes-2.5",
+          "advanced": false
+        }
+      },
+      {
+        "key": "TRAIN_METHOD",
+        "input": {
+          "name": "Training Method",
+          "type": "string",
+          "description": "Training approach: qlora | sft | dpo | grpo",
+          "default": "qlora",
+          "advanced": false
+        }
+      },
+      {
+        "key": "LORA_RANK",
+        "input": {
+          "name": "LoRA Rank",
+          "type": "number",
+          "description": "LoRA rank r. Set to 0 for full fine-tuning (requires more VRAM).",
+          "min": 0,
+          "max": 256,
+          "default": 64,
+          "advanced": true
+        }
+      },
+      {
+        "key": "LORA_ALPHA",
+        "input": {
+          "name": "LoRA Alpha",
+          "type": "number",
+          "description": "LoRA scaling factor alpha (typically 2× rank)",
+          "min": 0,
+          "max": 512,
+          "default": 128,
+          "advanced": true
+        }
+      },
+      {
+        "key": "TRAIN_BATCH_SIZE",
+        "input": {
+          "name": "Per-Device Batch Size",
+          "type": "number",
+          "description": "Batch size per GPU",
+          "min": 1,
+          "max": 64,
+          "default": 2,
+          "advanced": true
+        }
+      },
+      {
+        "key": "GRAD_ACCUM_STEPS",
+        "input": {
+          "name": "Gradient Accumulation Steps",
+          "type": "number",
+          "description": "Accumulate gradients over N steps (effective batch = batch_size × steps)",
+          "min": 1,
+          "max": 128,
+          "default": 8,
+          "advanced": true
+        }
+      },
+      {
+        "key": "LEARNING_RATE",
+        "input": {
+          "name": "Learning Rate",
+          "type": "string",
+          "description": "Optimizer learning rate (e.g. 2e-4 for LoRA, 5e-5 for full SFT)",
+          "default": "2e-4",
+          "advanced": true
+        }
+      },
+      {
+        "key": "NUM_TRAIN_EPOCHS",
+        "input": {
+          "name": "Training Epochs",
+          "type": "number",
+          "description": "Number of full passes over the training data",
+          "min": 1,
+          "max": 20,
+          "default": 1,
+          "advanced": true
+        }
+      },
+      {
+        "key": "MAX_SEQ_LENGTH",
+        "input": {
+          "name": "Max Sequence Length",
+          "type": "number",
+          "description": "Maximum token length for training samples",
+          "min": 512,
+          "max": 131072,
+          "default": 4096,
+          "advanced": true
+        }
+      },
+      {
+        "key": "JUPYTER_TOKEN",
+        "input": {
+          "name": "JupyterLab Token",
+          "type": "string",
+          "description": "Access token for JupyterLab UI (shown at pod port 8888)",
+          "default": "omnistack",
+          "advanced": false
+        }
+      },
+      {
+        "key": "WANDB_API_KEY",
+        "input": {
+          "name": "Weights & Biases API Key",
+          "type": "string",
+          "description": "Optional W&B API key for experiment tracking",
+          "default": "",
+          "advanced": true
+        }
+      },
+      {
+        "key": "PUBLIC_KEY",
+        "input": {
+          "name": "SSH Public Key",
+          "type": "string",
+          "description": "Optional SSH public key for terminal access on port 22",
+          "default": "",
+          "advanced": true
+        }
+      }
+    ]
+  }
+}
