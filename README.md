@@ -6,4 +6,28 @@ Docker Build Cloud CI — builds jibbalit/omni-stack:latest on every push to mai
 - Qwen2.5-VL-32B (vision)
 - Lilith-L3.3-70B GGUF (Ollama)
 - Wan2.2 T2V-14B (video)
+- Startup removes any non-target model caches so only these four remain.
 
+## Ollama GPU/device behavior
+- `start.sh` pins Ollama to the last detected GPU by default (for 8 GPUs, this is GPU `7`).
+- Override with `OLLAMA_CUDA_DEVICES` if you want a different device assignment.
+
+## FastAPI pipeline flow (gateway interconnection)
+The FastAPI gateway (`gateway.py`, port `8000`) is the pipeline router between clients and model backends.
+
+```mermaid
+flowchart TD
+    A[Client / Open WebUI / RunPod job] --> N[NGINX edge<br/>TLS, rate-limit, optional auth]
+    N --> B[FastAPI Router :8000]
+
+    B -->|model=qwen3-80b| C[Qwen3-80B on vLLM :8001]
+    B -->|model=vision / qwen2.5-vl| D[Qwen2.5-VL-32B (Transformers) :8002]
+    B -->|model=lilith / whisper| E[Lilith-Whisper on Ollama :11434]
+    B -->|model=wan2.2 / video| F[Wan2.2-T2V (Transformers) :8003]
+
+    F --> P[Optional post-processing]
+    C --> R[Unified response path]
+    D --> R
+    E --> R
+    P --> R
+```

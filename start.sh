@@ -10,6 +10,12 @@ WORKFLOW_LOG=/workspace/logs/workflow.log
 SERVICE_MAP=/workspace/logs/service_map.json
 OLLAMA_MODEL_NAME_DEFAULT="hf.co/bartowski/Liliths-Whisper-L3.3-70b-0.2a.i1-Q4_K_M-GGUF:latest"
 OLLAMA_MODEL_NAME="${OLLAMA_MODEL_NAME:-$OLLAMA_MODEL_NAME_DEFAULT}"
+QWEN3_MODEL_REPO="huihui-ai/Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated"
+QWEN3_MODEL_DIR="/workspace/hf_cache/Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated"
+VISION_MODEL_REPO="huihui-ai/Qwen2.5-VL-32B-Instruct-abliterated"
+VISION_MODEL_DIR="/workspace/hf_cache/Qwen2.5-VL-32B-Instruct-abliterated"
+WAN_MODEL_REPO="Wan-AI/Wan2.2-T2V-14B"
+WAN_MODEL_DIR="/workspace/hf_cache/Wan2.2-T2V-14B"
 
 log_phase() {
         local MSG=$1
@@ -24,17 +30,17 @@ write_service_map() {
         "qwen3-80b": {
             "backend": "vllm",
             "url": "http://127.0.0.1:8001",
-            "model": "huihui-ai/Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated"
+            "model": "$QWEN3_MODEL_REPO"
         },
         "vision": {
             "backend": "vl_server",
             "url": "http://127.0.0.1:8002",
-            "model": "huihui-ai/Qwen2.5-VL-32B-Instruct-abliterated"
+            "model": "$VISION_MODEL_REPO"
         },
         "wan2.2": {
             "backend": "wan_server",
             "url": "http://127.0.0.1:8003",
-            "model": "Wan-AI/Wan2.2-T2V-14B"
+            "model": "$WAN_MODEL_REPO"
         },
         "lilith": {
             "backend": "ollama",
@@ -78,43 +84,167 @@ export VLLM_URL="${VLLM_URL:-http://127.0.0.1:8001}"
 export VL_URL="${VL_URL:-http://127.0.0.1:8002}"
 export WAN_URL="${WAN_URL:-http://127.0.0.1:8003}"
 export OLLAMA_URL="${OLLAMA_URL:-http://127.0.0.1:11434}"
+export VLLM_TP="${VLLM_TP:-${TENSOR_PARALLEL:-1}}"
+export VLLM_CUDA_DEVICES="${VLLM_CUDA_DEVICES:-}"
+export VL_CUDA_DEVICES="${VL_CUDA_DEVICES:-}"
+export WAN_CUDA_DEVICES="${WAN_CUDA_DEVICES:-}"
+GPU_COUNT="$(nvidia-smi --query-gpu=index --format=csv,noheader 2>/dev/null | wc -l | xargs)"
+if [[ "$GPU_COUNT" =~ ^[0-9]+$ ]] && [ "$GPU_COUNT" -gt 0 ]; then
+    DEFAULT_OLLAMA_CUDA_DEVICE="$((GPU_COUNT - 1))"
+else
+    echo "[OLLAMA] WARNING: No GPUs detected via nvidia-smi; Ollama GPU pinning disabled."
+    DEFAULT_OLLAMA_CUDA_DEVICE=""
+fi
+export OLLAMA_CUDA_DEVICES="${OLLAMA_CUDA_DEVICES:-$DEFAULT_OLLAMA_CUDA_DEVICE}"
 
 # ══════════════════════════════════════════════════════
 # MODELS — pull from HuggingFace on first boot
 # ══════════════════════════════════════════════════════
 log_phase "phase=models status=download_started"
 
-download_model() {
-    local REPO=$1
-    local NAME=$(basename $REPO)
-    local DIR=/workspace/hf_cache/$NAME
-    if [ ! -d "$DIR" ]; then
-        echo "[MODELS] Downloading $REPO ..."
-        huggingface-cli download "$REPO" \
-            --local-dir "$DIR" \
-            --local-dir-use-symlinks False \
-            >> /workspace/logs/model_downloads.log 2>&1 \
-            && echo "[MODELS] $NAME done." \
-            || echo "[MODELS] WARNING: $NAME failed — check logs"
+run_with_optional_cuda() {
+    local CUDA_DEVICES=$1
+    shift
+    if [ -n "$CUDA_DEVICES" ]; then
+        CUDA_VISIBLE_DEVICES="$CUDA_DEVICES" "$@"
     else
-        echo "[MODELS] $NAME already cached, skipping."
+        "$@"
     fi
 }
 
-download_model "huihui-ai/Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated"
-download_model "huihui-ai/Qwen2.5-VL-32B-Instruct-abliterated"
-download_model "Wan-AI/Wan2.2-T2V-14B"
+download_model() {
+    local REPO=$1
+    local MARKER_FILE=$2
+    local NAME=$(basename $REPO)
+    local DIR=/workspace/hf_cache/$NAME
+    local MARKER_PATH="$DIR/$MARKER_FILE"
+
+    if [ -d "$DIR" ] && [ ! -f "$MARKER_PATH" ]; then
+        echo "[MODELS] $NAME cache exists but is incomplete (missing $MARKER_FILE). Removing incomplete cache and re-downloading..."
+        rm -rf "$DIR"
+    fi
+
+    if [ ! -d "$DIR" ]; then
+        echo "[MODELS] Downloading $REPO ..."
+        if huggingface-cli download "$REPO" \
+            --local-dir "$DIR" \
+            --local-dir-use-symlinks False \
+            >> /workspace/logs/model_downloads.log 2>&1; then
+            echo "[MODELS] $NAME done."
+        else
+            echo "[MODELS] FATAL: $NAME failed — check /workspace/logs/model_downloads.log"
+            return 1
+        fi
+    else
+        echo "[MODELS] $NAME already cached and complete, skipping."
+    fi
+
+    if [ ! -f "$MARKER_PATH" ]; then
+        echo "[MODELS] FATAL: $NAME missing required file $MARKER_FILE after download"
+        return 1
+    fi
+}
+
+reverse_name_matches() {
+    local LEFT=$1
+    local RIGHT=$2
+    local INDEX
+
+    if [ "${#LEFT}" -ne "${#RIGHT}" ]; then
+        return 1
+    fi
+
+    for ((INDEX=${#LEFT}-1; INDEX>=0; INDEX--)); do
+        if [ "${LEFT:$INDEX:1}" != "${RIGHT:$INDEX:1}" ]; then
+            return 1
+        fi
+    done
+}
+
+name_in_allowed_set() {
+    local CANDIDATE=$1
+    shift
+    local ALLOWED_NAME
+
+    for ALLOWED_NAME in "$@"; do
+        if reverse_name_matches "$CANDIDATE" "$ALLOWED_NAME"; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+name_contains_allowed_fragment() {
+    local CANDIDATE=$1
+    shift
+    local ALLOWED_FRAGMENT
+
+    for ALLOWED_FRAGMENT in "$@"; do
+        if [[ "$CANDIDATE" == *"$ALLOWED_FRAGMENT"* ]]; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+purge_non_target_hf_models() {
+    local TARGET_HF_MODEL_NAME_FRAGMENTS=(
+        "$(basename "$QWEN3_MODEL_DIR")"
+        "$(basename "$VISION_MODEL_DIR")"
+        "$(basename "$WAN_MODEL_DIR")"
+    )
+    local MODEL_DIR
+    local DIR_NAME
+
+    for MODEL_DIR in /workspace/hf_cache/*; do
+        if [ ! -d "$MODEL_DIR" ]; then
+            continue
+        fi
+
+        DIR_NAME="$(basename "$MODEL_DIR")"
+        if ! name_contains_allowed_fragment "$DIR_NAME" "${TARGET_HF_MODEL_NAME_FRAGMENTS[@]}"; then
+            echo "[MODELS] Removing non-target HF model cache: $DIR_NAME"
+            rm -rf "$MODEL_DIR"
+        fi
+    done
+}
+
+download_model "$QWEN3_MODEL_REPO" "config.json"
+download_model "$VISION_MODEL_REPO" "config.json"
+download_model "$WAN_MODEL_REPO" "model_index.json"
+purge_non_target_hf_models
 log_phase "phase=models status=download_completed"
 
+# Returns local Ollama model identifiers (NAME column, including tags) one per line.
+list_ollama_models() {
+    local LIST_OUTPUT
+    if ! LIST_OUTPUT="$(ollama list 2>&1)"; then
+        echo "[OLLAMA] WARNING: Unable to list local models: $LIST_OUTPUT"
+        return 1
+    fi
+    printf '%s\n' "$LIST_OUTPUT" | awk 'NR>1 && NF {print $1}'
+}
+
 # Lilith Whisper via Ollama
-OLLAMA_MODELS=/workspace/ollama_models ollama serve > /workspace/logs/ollama.log 2>&1 &
+if [ -n "$OLLAMA_CUDA_DEVICES" ]; then
+    echo "[OLLAMA] Using CUDA device(s): $OLLAMA_CUDA_DEVICES"
+fi
+run_with_optional_cuda "$OLLAMA_CUDA_DEVICES" env OLLAMA_MODELS=/workspace/ollama_models ollama serve > /workspace/logs/ollama.log 2>&1 &
 log_phase "phase=models status=ollama_started_for_pull"
 for i in $(seq 1 20); do
     sleep 2
     curl -sf http://localhost:11434/api/tags > /dev/null 2>&1 && break
     echo "[OLLAMA] Waiting... ($i/20)"
 done
-if ! ollama list 2>/dev/null | grep -qi "lilith"; then
+if OLLAMA_LOCAL_MODELS="$(list_ollama_models)"; then
+    :
+else
+    OLLAMA_LOCAL_MODELS=""
+    echo "[OLLAMA] WARNING: Local model list unavailable; ensuring target model is present."
+fi
+if ! printf '%s\n' "$OLLAMA_LOCAL_MODELS" | grep -Fxq "$OLLAMA_MODEL_NAME"; then
     echo "[OLLAMA] Pulling $OLLAMA_MODEL_NAME ..."
     ollama pull "$OLLAMA_MODEL_NAME" \
         >> /workspace/logs/ollama_pull.log 2>&1 \
@@ -123,6 +253,19 @@ if ! ollama list 2>/dev/null | grep -qi "lilith"; then
             echo "[OLLAMA] FATAL: Lilith pull failed"
             exit 1
         }
+fi
+if OLLAMA_LOCAL_MODELS="$(list_ollama_models)"; then
+    while IFS= read -r MODEL_NAME; do
+        if [ -z "$MODEL_NAME" ]; then
+            continue
+        fi
+
+        if ! name_in_allowed_set "$MODEL_NAME" "$OLLAMA_MODEL_NAME"; then
+            echo "[OLLAMA] Removing non-target local model: $MODEL_NAME"
+            ollama rm "$MODEL_NAME" >> /workspace/logs/ollama_pull.log 2>&1 \
+                || echo "[OLLAMA] WARNING: Failed to remove non-target model: $MODEL_NAME"
+        fi
+    done <<< "$OLLAMA_LOCAL_MODELS"
 fi
 log_phase "phase=models status=ollama_pull_completed"
 
@@ -203,41 +346,44 @@ wait_for_url() {
 
 log_phase "phase=workflow status=services_starting"
 
-# ── vLLM (Qwen3-Next-80B-A3B) ─────────────────────────
+# ── vLLM-led model server orchestration (non-Ollama) ──
+# vLLM starts first, then vision and Wan start in sequence.
+
+# vLLM (Qwen3-Next-80B-A3B)
 echo "[SVC] Starting vLLM..."
-python3 -m vllm.entrypoints.openai.api_server \
-    --model /workspace/hf_cache/Huihui-Qwen3-Next-80B-A3B-Instruct-abliterated \
+run_with_optional_cuda "$VLLM_CUDA_DEVICES" python3 -m vllm.entrypoints.openai.api_server \
+    --model "$QWEN3_MODEL_DIR" \
     --port 8001 \
     --host 0.0.0.0 \
-    --tensor-parallel-size ${VLLM_TP:-1} \
+    --tensor-parallel-size "$VLLM_TP" \
     --gpu-memory-utilization 0.45 \
     --max-model-len 16384 \
     --enable-chunked-prefill \
     --served-model-name qwen3-80b \
     > /workspace/logs/vllm.log 2>&1 &
 VLLM_PID=$!
+wait_for_url "vLLM" "$VLLM_URL/health" 180 5
 
-# ── Vision Server (Qwen2.5-VL-32B) ─────────────────────
+# Vision Server (Qwen2.5-VL-32B)
 echo "[SVC] Starting Qwen2.5-VL-32B vision server..."
-python3 /app/vl_server.py \
-    --model /workspace/hf_cache/Qwen2.5-VL-32B-Instruct-abliterated \
+run_with_optional_cuda "$VL_CUDA_DEVICES" python3 /app/vl_server.py \
+    --model "$VISION_MODEL_DIR" \
     --port 8002 \
     --gpu-frac 0.35 \
     > /workspace/logs/vl_server.log 2>&1 &
 VL_PID=$!
+wait_for_url "Vision" "$VL_URL/health" 180 5
 
-# ── Wan2.2 Video Server ─────────────────────────────────
+# Wan2.2 Video Server
 echo "[SVC] Starting Wan2.2..."
-python3 /app/wan_server.py \
-    --model-dir /workspace/hf_cache \
+run_with_optional_cuda "$WAN_CUDA_DEVICES" python3 /app/wan_server.py \
+    --model-dir "$WAN_MODEL_DIR" \
     --port 8003 \
     > /workspace/logs/wan_server.log 2>&1 &
 WAN_PID=$!
+wait_for_url "Wan2.2" "$WAN_URL/health" 180 5
 
 # ── Unified Gateway ─────────────────────────────────────
-wait_for_url "vLLM" "$VLLM_URL/health" 180 5
-wait_for_url "Vision" "$VL_URL/health" 180 5
-wait_for_url "Wan2.2" "$WAN_URL/health" 180 5
 wait_for_url "Ollama" "$OLLAMA_URL/api/tags" 60 2
 
 # Ensure the heavy model servers are truly loaded, not just listening.
@@ -267,7 +413,10 @@ echo "[SVC] Starting Open WebUI..."
 DATA_DIR=/workspace/webui \
 WEBUI_SECRET_KEY="${WEBUI_SECRET_KEY:-omnistack}" \
 WEBUI_AUTH="${WEBUI_AUTH:-False}" \
+ENABLE_OPENAI_API="${ENABLE_OPENAI_API:-True}" \
+ENABLE_OLLAMA_API="${ENABLE_OLLAMA_API:-False}" \
 OPENAI_API_BASE_URL="http://localhost:8000/v1" \
+OPENAI_API_BASE_URLS="http://localhost:8000/v1" \
 OPENAI_API_KEY="none" \
 open-webui serve \
     --host 0.0.0.0 \

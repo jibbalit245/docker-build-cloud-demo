@@ -24,26 +24,30 @@ app = FastAPI(title="Wan2.2 Video Server", version="1.0.0")
 pipe = None
 model_dir = None
 device = "cuda" if torch.cuda.is_available() else "cpu"
+WAN_MODEL_NAME = "Wan2.2-T2V-14B"
 
 
 def load_wan_model(model_dir_: str):
     global pipe, model_dir
-    model_dir = model_dir_
+    if os.path.basename(os.path.normpath(model_dir_)) == WAN_MODEL_NAME:
+        t2v_path = model_dir_
+    else:
+        t2v_path = os.path.join(model_dir_, WAN_MODEL_NAME)
+    model_dir = t2v_path
 
     try:
         from diffusers import WanPipeline, WanImageToVideoPipeline
-        t2v_path = os.path.join(model_dir_, "Wan2.2-T2V-14B")
 
         if not os.path.exists(t2v_path):
-            print(f"[wan_server] Downloading Wan2.2-T2V-14B to {t2v_path}...")
+            print(f"[wan_server] Downloading {WAN_MODEL_NAME} to {t2v_path}...")
             from huggingface_hub import snapshot_download
             snapshot_download(
-                repo_id="Wan-AI/Wan2.2-T2V-14B",
+                repo_id=f"Wan-AI/{WAN_MODEL_NAME}",
                 local_dir=t2v_path,
                 ignore_patterns=["*.md", "*.txt"],
             )
 
-        print(f"[wan_server] Loading Wan2.2-T2V-14B from {t2v_path}...")
+        print(f"[wan_server] Loading {WAN_MODEL_NAME} from {t2v_path}...")
         pipe = WanPipeline.from_pretrained(
             t2v_path,
             torch_dtype=torch.bfloat16,
@@ -133,7 +137,7 @@ def generate_video(req: VideoRequest):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model-dir", default="/workspace/models/wan2.2")
+    parser.add_argument("--model-dir", default="/workspace/hf_cache/Wan2.2-T2V-14B")
     parser.add_argument("--port", type=int, default=8003)
     parser.add_argument("--no-autoload", action="store_true",
                         help="Skip model loading at startup (load manually via /load)")
